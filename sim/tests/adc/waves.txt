@@ -1,0 +1,40 @@
+# GTKWave signals for the adc test. Paths are relative to tb_adc.
+# Format: see sim/waves.py
+
+clk
+rstn
+
+group SPI pins
+    adc_spi_cs_n
+    adc_spi_sck
+    adc_spi_mosi
+    adc_spi_miso
+end
+
+group AXIS out
+    adc_axis.tvalid
+    adc_axis.tready
+    adc_axis.tid     dec
+    adc_axis.tdata
+end
+
+group ADC model (datasheet behavior)
+    adc_chip.rise_edge     dec
+    adc_chip.fall_edge     dec
+    adc_chip.din_shift
+    adc_chip.ctrl_channel  dec
+    adc_chip.conv_channel  dec
+    adc_chip.held_value
+    adc_chip.dout_en
+end
+
+group DUT internals
+    dut.sck_counter         dec
+    dut.sck_bit_counter     dec
+    dut.sck_bit_counter_fe  dec
+    dut.full_address
+    dut.current_channel     dec
+    dut.next_channel        dec
+    dut.adc_data
+    dut.conversion_done
+end

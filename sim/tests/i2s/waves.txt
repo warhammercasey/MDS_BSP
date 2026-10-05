@@ -1,0 +1,40 @@
+# GTKWave signals for the i2s test. Paths are relative to tb_i2s.
+# Format: see sim/waves.py
+
+clk
+rstn
+
+group I2S pins
+    i2s_sck
+    i2s_ws
+    i2s_data   bin
+end
+
+group AXIS out
+    axis_i2s.tvalid
+    axis_i2s.tready
+    axis_i2s.tid     dec
+    axis_i2s.tdata   sdec
+end
+
+group Received audio (tid 0-7)
+    rx_audio*   analog
+end
+
+group Mic models (line 0)
+    g_mic[0].mic.active
+    g_mic[0].mic.slot       dec
+    g_mic[0].mic.data_oe
+    g_mic[0].mic.tx_sample  sdec
+    g_mic[1].mic.data_oe
+    g_mic[1].mic.tx_sample  sdec
+end
+
+group DUT internals
+    dut.i2s_clk_counter            dec
+    dut.bit_counter                dec
+    dut.i2s_data_reg*              sdec
+    dut.available_samples          dec
+    dut.current_sample             dec
+    dut.available_samples_channel
+end

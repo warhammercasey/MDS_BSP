@@ -1,0 +1,39 @@
+# GTKWave signals for the uart test. Paths are relative to tb_uart.
+# Format: see sim/waves.py
+
+clk
+rstn
+
+group Serial pins
+    rx
+    tx
+end
+
+group AXIS TX (into DUT)
+    axis_tx.tvalid
+    axis_tx.tready
+    axis_tx.tdata   ascii
+end
+
+group AXIS RX (out of DUT)
+    axis_rx.tvalid
+    axis_rx.tready
+    axis_rx.tdata   ascii
+end
+
+group uart_rx internals
+    dut.uart_rx_i.enable
+    dut.uart_rx_i.bit_latch
+    dut.uart_rx_i.done
+    dut.uart_rx_i.bit_counter   dec
+    dut.uart_rx_i.baud_counter  dec
+    dut.uart_rx_i.rx_data
+end
+
+group uart_tx internals
+    dut.uart_tx_i.latched_valid
+    dut.uart_tx_i.done
+    dut.uart_tx_i.bit_count     dec
+    dut.uart_tx_i.baud_counter  dec
+    dut.uart_tx_i.tx_data_latched
+end
