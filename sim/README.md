@@ -2,6 +2,8 @@
 
 Designer-level sims for individual components. The sims build with Verilator (in WSL), and you view waves in GTKWave.
 
+To set up the toolchain on a fresh machine (instructions written for agents), see [SETUP.md](SETUP.md).
+
 ## Requirements
 
 - WSL (Ubuntu) with `verilator` (5.x), `make` and `g++`
