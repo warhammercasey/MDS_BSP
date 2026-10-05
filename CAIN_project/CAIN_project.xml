@@ -14,6 +14,7 @@
         <efx:design_file name="../src/interfaces/axis_if.sv" version="default" library="default"/>
         <efx:design_file name="../src/adc/adc.sv" version="default" library="default"/>
         <efx:design_file name="../src/audio/i2s.sv" version="default" library="default"/>
+        <efx:design_file name="../src/sram/sram_controller.sv" version="default" library="default"/>
         <efx:top_vhdl_arch name=""/>
         <efx:msg_config name=""/>
         <efx:partition_definitions name=""/>

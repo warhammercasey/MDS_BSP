@@ -165,10 +165,33 @@ module cain_top (
     assign rmii_mdio_OUT = 1'b0;
     assign rmii_mdio_OE  = 1'b0;
 
-    // QSPI SRAM - chip select deasserted, clock idle low, SIO tristated
-    assign qspi_sck      = 1'b0;
-    assign qspi_sio_OUT  = 4'h0;
-    assign qspi_sio_OE   = 4'h0;
-    assign qspi_cs_n     = 1'b1;
+    // QSPI SRAM
+    assign qspi_sck = clk_sram;
+    sram_controller sram_controller_i(
+        .clk(clk_sram),
+        .rstn(rstn),
+
+        .qspi_sio_IN(qspi_sio_IN),
+        .qspi_sio_OUT(qspi_sio_OUT),
+        .qspi_sio_OE(qspi_sio_OE),
+        .qspi_cs_n(qspi_cs_n),
+
+        .wr_addr('0),
+        .wr_addr_valid(1'b0),
+        .wr_data('0),
+        .wr_valid(1'b0),
+        .wr_ready(),
+        .wr_last(1'b0),
+
+        .rd_addr('0),
+        .rd_addr_valid(1'b0),
+        .rd_data(),
+        .rd_valid(),
+        .rd_ready(1'b0),
+        .rd_last(),
+        .rd_burst_len('0),
+
+        .busy()
+    );
 
 endmodule

@@ -3,7 +3,7 @@
     <efxpt:Metadata>
         <efxpt:Device>T20Q100F3</efxpt:Device>
         <efxpt:Package>100-pin QFP</efxpt:Package>
-        <efxpt:LastModified>2026-10-02T10:34:55.812652</efxpt:LastModified>
+        <efxpt:LastModified>2026-10-05T15:00:10.909594</efxpt:LastModified>
     </efxpt:Metadata>
     <efxpt:CustomSettings>
         <efxpt:param name="exclude_pin_warning_enable" value="true" value_type="bool"/>

@@ -10,7 +10,6 @@ module sram_controller #(
     //   SIO1: MISO
     //   SIO2: N/A
     //   SIO3: HOLD
-    output logic        qspi_sck,
     input  logic [3:0]  qspi_sio_IN,
     output logic [3:0]  qspi_sio_OUT,
     output logic [3:0]  qspi_sio_OE,
@@ -18,15 +17,17 @@ module sram_controller #(
 
     // RAM interface
     // Write interface
-    // Address is latched on first wr_valid, and data is written on subsequent wr_valid cycles.
+    // Address is latched on wr_addr_valid, and data is written on subsequent wr_valid cycles.
+    // Wait until busy is low before asserting wr_addr_valid
     input  logic [23:0] wr_addr,
     input  logic wr_addr_valid,
     input  logic [7:0] wr_data,
-    input  logic wr_valid, // Treated as valid 
+    input  logic wr_valid,
     output logic wr_ready,
     input  logic wr_last,
 
     // Latches addr on rd_addr_valid. Reads rd_burst_len bytes from memory and streams it out on rd_data.
+    // Wait until busy is low before asserting rd_addr_valid
     input  logic [23:0] rd_addr,
     input  logic rd_addr_valid,
     output logic [7:0] rd_data,
@@ -108,7 +109,15 @@ module sram_controller #(
 
     // Busy
     assign busy = (state != IDLE);
-    assign write_done = wr_valid && wr_ready && wr_last;
+
+    // Write done waits 2 clock cyles to allow data to transfer
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            write_done <= 1'b0;
+        end else begin
+            write_done <= $past(wr_valid && wr_ready && wr_last);
+        end
+    end
 
 
     // CS
@@ -163,6 +172,21 @@ module sram_controller #(
     end
 
 
+    // Latch incoming wr data
+    logic [7:0] wr_data_latched;
+    assign wr_ready = (state == WRITE) && (qspi_byte_count >= 1 + 3 - 1) && qspi_bit_count[0] && ~write_done; // Requests new byte on second 4-bit pulse after address is transferred
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            wr_data_latched <= '0;
+
+        end else begin
+            if(wr_valid && wr_ready) begin
+                wr_data_latched <= wr_data;
+            end
+        end
+    end
+
+
     // SIO outputs
     always_comb begin
         case(state)
@@ -181,7 +205,7 @@ module sram_controller #(
 
         READ: begin
             if(qspi_byte_count == '0) begin
-                qspi_sio_OUT = qspi_bit_count[0] ? (CMD_READ[7:4]) : (CMD_READ[3:0]);
+                qspi_sio_OUT = qspi_bit_count[0] ? (CMD_READ[3:0]) : (CMD_READ[7:4]);
                 qspi_sio_OE = 4'b1111; // Drive all SIO lines
             end else if(qspi_byte_count < 1 + 3) begin // Next 3 bytes are address
                 qspi_sio_OUT = read_addr_latched[23 - (qspi_bit_count - 2)*4 -: 4];
@@ -194,13 +218,13 @@ module sram_controller #(
 
         WRITE: begin
             if(qspi_byte_count == '0) begin
-                qspi_sio_OUT = qspi_bit_count[0] ? (CMD_WRITE[7:4]) : (CMD_WRITE[3:0]);
+                qspi_sio_OUT = qspi_bit_count[0] ? (CMD_WRITE[3:0]) : (CMD_WRITE[7:4]);
                 qspi_sio_OE = 4'b1111; // Drive all SIO lines
             end else if(qspi_byte_count < 1 + 3) begin // Next 3 bytes are address
                 qspi_sio_OUT = write_addr_latched[23 - (qspi_bit_count - 2)*4 -: 4];
                 qspi_sio_OE = 4'b1111; // Drive all SIO lines
             end else begin
-                qspi_sio_OUT = qspi_bit_count[0] ? (wr_data[7:4]) : (wr_data[3:0]);
+                qspi_sio_OUT = qspi_bit_count[0] ? (wr_data_latched[3:0]) : (wr_data_latched[7:4]);
                 qspi_sio_OE = 4'b1111; // Drive all SIO lines
             end
         end
@@ -212,9 +236,39 @@ module sram_controller #(
         endcase
     end
 
-    // Handle write channel ready
-    assign wr_ready = (state == IDLE) || (state == WRITE && qspi_bit_count[0])
+    
+    // Read in data
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            rd_data <= '0;
 
+        end else begin
+            // 1 CMD byte, 3 address, 3 dummy
+            if(qspi_byte_count >= 1 + 3 + 3) begin
+                if(~qspi_bit_count[0]) begin // first transfer, MSBs
+                    rd_data[7:4] <= qspi_sio_IN;
+                end else begin
+                    rd_data[3:0] <= qspi_sio_IN;
+                end
+            end
+        end
+    end
 
+    // Handle read valids and last
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            rd_valid <= 1'b0;
+            rd_last <= 1'b0;
+
+        end else begin
+            if(qspi_byte_count >= 1 + 3 + 3 && qspi_bit_count[0]) begin
+                rd_valid <= 1'b1;
+                rd_last <= qspi_byte_count - (1 + 3 + 3) + 1 >= rd_burst_len;
+            end else begin
+                rd_valid <= 1'b0;
+                rd_last <= 1'b0;
+            end
+        end
+    end
 
 endmodule
