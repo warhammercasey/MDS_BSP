@@ -62,6 +62,10 @@ module cain_top (
     localparam CLK_50_FREQ   =  50_000_000; // 50 MHz
     localparam CLK_IO_FREQ   =  73_571_400; // 73.5714 MHz
 
+    localparam CLK_IO_CORE_RATIO = (CLK_IO_FREQ > CLK_CORE_FREQ) ? 
+                                        int'($ceil(real'(CLK_IO_FREQ)/real'(CLK_CORE_FREQ))) :
+                                        int'($ceil(real'(CLK_CORE_FREQ)/real'(CLK_IO_FREQ)));
+
     localparam UART_BAUD     = 115200; // 115200 baud rate
 
     localparam ADC_BITS      = 8;
@@ -69,6 +73,7 @@ module cain_top (
 
     localparam I2S_CLK_FREQ  = 4_096_000; // 4.096 MHz I2S clock
     localparam I2S_BITS      = 18; // Data format is 24-bit but only 18 bits are used
+    localparam ADC_CHANNELS  = 8;
 
     logic rstn, rstn_io;
     assign rstn = rst_in_n && clk_locked;
@@ -91,7 +96,7 @@ module cain_top (
     // I2S
     axis_tid_if #(
         .WIDTH(I2S_BITS),
-        .ID_WIDTH($clog2(8))
+        .ID_WIDTH($clog2(ADC_CHANNELS))
     ) i2s_axis ();
     i2s #(
         .CLK_FREQ(CLK_IO_FREQ),
@@ -105,7 +110,27 @@ module cain_top (
         .i2s_data(i2s_data),
         .axis_i2s(i2s_axis)
     );
-    assign i2s_axis.tready = 1'b1;
+
+    // CDC ADC data to core clock
+    axis_tid_if #(
+        .WIDTH(I2S_BITS),
+        .ID_WIDTH($clog2(ADC_CHANNELS))
+    ) i2s_axis_core();
+    axis_tid_cdc_fifo #(
+        .WIDTH(I2S_BITS), // Data width
+        .ID_WIDTH($clog2(ADC_CHANNELS)),
+        .AWIDTH(8),
+        .CLK_RATIO(CLK_IO_CORE_RATIO),
+        .FAST_TO_SLOW(CLK_IO_FREQ > CLK_CORE_FREQ)
+    ) axis_tid_cdc_fifo_adc_data (
+        .clka(clk_io),
+        .rstn(rstn_io),
+        .clkb(clk_core),
+
+        .axis_in(i2s_axis),
+        .axis_out(i2s_axis_core)
+    );
+    assign i2s_axis_core.tready = 1'b1;
 
 
     // ADC SPI
