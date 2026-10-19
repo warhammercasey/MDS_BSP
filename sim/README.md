@@ -67,6 +67,16 @@ endmodule
 
 Reusable models of external devices go in `sim/models/`; add them to a test's `files.f`. For example, `adc088s022_model.sv` (ADC, SPI) and `sph0645_model.sv` (I2S microphone) are models built from the chips' datasheets, and they check interface timing. For a check that can fire often or from many instances, use `tb_error_once(key, msg)`: it reports the first occurrence and counts the rest.
 
+### CDC tests
+
+The `src/cdc` tests (`ff_sync`, `pulse_cdc`, `two_port_bram`, `axis_cdc_fifo`, `axis_tid_cdc_fifo`) instantiate one DUT per ordered pair of the design's four clocks, 12 in all, and run them in parallel. They share these helpers:
+
+- `sim/common/cain_clocks_pkg.sv` holds the clock frequencies, which mirror `cain_top`, and the pair numbering. Pair 10 is `clk_io -> clk_core`, the pair the waves show.
+- `sim/models/clk_gen.sv` is a clock with a random start phase and per-edge jitter. Because the PLL clocks have exact frequency ratios, the jitter is what makes their edges drift through every relative alignment.
+- `sim/models/ff_sync_checker.sv` is bound into every `ff_sync`. It fails the test if a multi-bit synchronized bus changes more than one bit in a clock (i.e. it isn't Gray-coded). Add it to `files.f` for any test of logic that uses `ff_sync`.
+
+Verilator is a 2-state simulator and does not model metastability, so the tests check the structural rules instead: the number of synchronizer stages (measured as latency) and Gray coding.
+
 ## Waves
 
 `--waves` (after a run) and `--view` (no re-run) open one GTKWave window, zoomed to fit. Each test's signals go in a group named after the test. When you select several tests (e.g. `--all --waves`), their dumps are merged into `sim/out/_waves/waves.vcd`, with each test's hierarchy under a scope named after the test. All the tests then share one timeline, each starting at t=0.

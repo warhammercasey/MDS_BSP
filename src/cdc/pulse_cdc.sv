@@ -1,69 +1,42 @@
-module pulse_cdc #(
-    parameter EN_FAST_TO_SLOW = 0,
-    parameter CLK_RATIO       = 2
-)(
+module pulse_cdc (
     input  logic clka,
     input  logic clkb,
 
-    input  logic din,
-    output logic dout
+    input  logic din,  // One pulse per clka cycle that din is high
+    output logic dout  // One clkb cycle pulse per input pulse
 );
 
-    generate
-    if(EN_FAST_TO_SLOW) begin
+    // Toggle synchronizer: each input pulse flips a level in clka, the level crosses
+    // through ff_sync, and clkb turns each change of the level back into a pulse.
+    // Works for any clock ratio in either direction.
+    //
+    // Input pulses must be at least 3 clkb periods apart. Closer pulses can cancel
+    // in pairs (the level flips back before clkb sees it), so they are lost, not merged.
 
-    // Extend the pulse to 2x slower clock periods
-    logic [CLK_RATIO*2-1:0] delay_line;
-    logic extended_pulse, cdc_pulse;
+    logic toggle_a;
+    logic toggle_b;
+    logic toggle_b_last;
+
     always_ff @(posedge clka) begin
-        for(int i = 0; i < CLK_RATIO*2-1; i = i + 1) begin
-            delay_line[i + 1] <= delay_line[i];
+        if (din) begin
+            toggle_a <= ~toggle_a;
         end
-        delay_line[0] <= din;
-
-        extended_pulse <= |delay_line;
     end
 
-    // 2 ff sync across clocks
     ff_sync #(
         .WIDTH(1)
     ) ff_sync_i (
         .clka(clka),
         .clkb(clkb),
 
-        .din(extended_pulse),
-        .dout(cdc_pulse)
+        .din(toggle_a),
+        .dout(toggle_b)
     );
 
-    // Pulse output on rising edge of cdc pulse
+    // Pulse on every change of the synchronized level
     always_ff @(posedge clkb) begin
-        dout <= cdc_pulse && ~$past(cdc_pulse);
+        toggle_b_last <= toggle_b;
+        dout          <= toggle_b ^ toggle_b_last;
     end
-
-
-
-    end else begin // Slow to fast clock
-
-
-    logic cdc_pulse;
-
-    // 2 ff sync across clocks
-    ff_sync #(
-        .WIDTH(1)
-    ) ff_sync_i (
-        .clka(clka),
-        .clkb(clkb),
-
-        .din(din),
-        .dout(cdc_pulse)
-    );
-
-    // Pulse output on rising edge of cdc pulse
-    always_ff @(posedge clkb) begin
-        dout <= cdc_pulse && ~$past(cdc_pulse);
-    end
-
-    end
-    endgenerate
 
 endmodule

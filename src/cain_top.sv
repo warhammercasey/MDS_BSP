@@ -62,10 +62,6 @@ module cain_top (
     localparam CLK_50_FREQ   =  50_000_000; // 50 MHz
     localparam CLK_IO_FREQ   =  73_571_400; // 73.5714 MHz
 
-    localparam CLK_IO_CORE_RATIO = (CLK_IO_FREQ > CLK_CORE_FREQ) ? 
-                                        int'($ceil(real'(CLK_IO_FREQ)/real'(CLK_CORE_FREQ))) :
-                                        int'($ceil(real'(CLK_CORE_FREQ)/real'(CLK_IO_FREQ)));
-
     localparam UART_BAUD     = 115200; // 115200 baud rate
 
     localparam ADC_BITS      = 8;
@@ -75,9 +71,15 @@ module cain_top (
     localparam I2S_BITS      = 18; // Data format is 24-bit but only 18 bits are used
     localparam ADC_CHANNELS  = 8;
 
-    logic rstn, rstn_io;
-    assign rstn = rst_in_n && clk_locked;
-    assign rstn_io = rst_in_n && clk_io_locked;
+    logic rstn_50, rstn_core, rstn_sram, rstn_io;
+    reset_sync #(
+        .NUM_CLKS(4)
+    ) reset_sync_i (
+        .clk('{clk_50, clk_core, clk_sram, clk_io}),
+        .rst_in_n(rst_in_n),
+        .clk_locked(clk_locked && clk_io_locked),
+        .rstn('{rstn_50, rstn_core, rstn_sram, rstn_io})
+    );
 
 
     // ------------------------------------------------------------------
@@ -119,13 +121,12 @@ module cain_top (
     axis_tid_cdc_fifo #(
         .WIDTH(I2S_BITS), // Data width
         .ID_WIDTH($clog2(ADC_CHANNELS)),
-        .AWIDTH(8),
-        .CLK_RATIO(CLK_IO_CORE_RATIO),
-        .FAST_TO_SLOW(CLK_IO_FREQ > CLK_CORE_FREQ)
+        .AWIDTH(8)
     ) axis_tid_cdc_fifo_adc_data (
         .clka(clk_io),
-        .rstn(rstn_io),
+        .rstna(rstn_io),
         .clkb(clk_core),
+        .rstnb(rstn_core),
 
         .axis_in(i2s_axis),
         .axis_out(i2s_axis_core)
@@ -194,7 +195,7 @@ module cain_top (
     assign qspi_sck = clk_sram;
     sram_controller sram_controller_i(
         .clk(clk_sram),
-        .rstn(rstn),
+        .rstn(rstn_sram),
 
         .qspi_sio_IN(qspi_sio_IN),
         .qspi_sio_OUT(qspi_sio_OUT),

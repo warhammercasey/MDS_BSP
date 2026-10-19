@@ -1,0 +1,26 @@
+# GTKWave signals for the pulse_cdc test. Paths are relative to tb_pulse_cdc.
+# Format: see sim/waves.py. Pair numbers are listed in sim/common/cain_clocks_pkg.sv.
+
+group clk_io -> clk_core (slow to fast)
+    g_pair[10].h.clka
+    g_pair[10].h.din
+    g_pair[10].h.dut.toggle_a
+    g_pair[10].h.clkb
+    g_pair[10].h.dut.toggle_b
+    g_pair[10].h.dut.toggle_b_last
+    g_pair[10].h.dout
+    g_pair[10].h.n_in           dec
+    g_pair[10].h.n_out          dec
+end
+
+group clk_core -> clk_io (fast to slow)
+    g_pair[5].h.clka
+    g_pair[5].h.din
+    g_pair[5].h.dut.toggle_a
+    g_pair[5].h.clkb
+    g_pair[5].h.dut.toggle_b
+    g_pair[5].h.dut.toggle_b_last
+    g_pair[5].h.dout
+    g_pair[5].h.n_in            dec
+    g_pair[5].h.n_out           dec
+end

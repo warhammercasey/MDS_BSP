@@ -8,14 +8,24 @@ module ff_sync #(
     output logic [WIDTH-1:0] dout
 );
 
-    logic [WIDTH-1:0] ff;
+    // A multi-bit din must change at most one bit per clka cycle (e.g. Gray code):
+    // each bit resolves independently in clkb, so mixed old/new values can appear otherwise.
+
+    logic [WIDTH-1:0] ffa;
+    // async_reg (Efinity synthesis attribute) marks the synchronizer flops: they are not
+    // merged or duplicated, and place and route keeps them close together.
+    (* async_reg = "true" *) logic [WIDTH-1:0] ffb;
+    (* async_reg = "true" *) logic [WIDTH-1:0] ffc;
 
     always_ff @(posedge clka) begin
-        ff <= din;
+        ffa <= din;
     end
-    
+
     always_ff @(posedge clkb) begin
-        dout <= ff;
+        ffb <= ffa;
+        ffc <= ffb;
     end
+
+    assign dout = ffc;
 
 endmodule

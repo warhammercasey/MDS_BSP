@@ -43,9 +43,10 @@ Install any CPython 3.10+ on Windows and make sure `python` is on PATH. Nothing 
 
 From the repo root:
 ```powershell
-python sim/run.py --list    # expect: adc, i2s, uart
-python sim/run.py --all     # expect: every line PASS, ending with "3/3 passed"; exit code 0
+python sim/run.py --list    # one line per directory in sim/tests/
+python sim/run.py --all     # runs everything and prints the report table
 ```
+A test can fail because of a real RTL bug rather than a setup problem. The setup is working if every test builds (no `BUILD_FAIL`) and reaches a verdict (`PASS` or `FAIL`, not `NO_VERDICT`).
 A first build of each test takes tens of seconds while the C++ compiles. Later runs reuse `sim/out/<test>/obj_dir` and only rebuild what changed. Use `--clean` to force a full rebuild.
 
 If something fails, read these in order:
@@ -106,6 +107,9 @@ Verilator flags (in `run.py`): `--binary --timing --timescale 1ns/1ps -Wno-fatal
   - An assignment pattern (`'{...}`) can't be passed directly to `queue.push_back()`. Assign it to a variable first.
   - Initialized local variables inside `always`/`initial` blocks must be declared `automatic`.
   - Intra-assignment NBA delays (`x <= #(T) y;`) do work.
+- **Testbench stimulus in `initial` blocks:** Verilator runs `x <= y` inside an `initial` block as a *blocking* assignment, which races with the DUT's flops. Drive DUT inputs on the opposite clock edge (`@(negedge clk) x = y;`), or from an `always @(posedge clk)` block, where `<=` works normally.
+- **Clocks in generate loops:** driving elements of an unpacked clock array from per-iteration `initial` blocks did not toggle under Verilator 5.020. Use a module instance per clock instead (`sim/models/clk_gen.sv`).
+- **CDC tests** run one DUT per ordered pair of the 4 clock domains (see README.md, "CDC tests"). Frequencies live in `sim/common/cain_clocks_pkg.sv` and must match `cain_top`.
 - **Multi-instance models:** a timing violation that can fire from all 8 mic instances (or on every edge) should use `tb_error_once(key, msg)`. It reports the first occurrence and `tb_finish()` prints a count of the rest.
 - **TB conventions:** every TB includes `tb_macros.svh`, imports `tb_pkg::*`, calls `` `TB_INIT `` and `` `TB_WATCHDOG(...) ``, logs each phase with `tb_info()` (that text shows in the runner's progress line), and ends with `tb_finish()`. AXI-Stream sinks drive `tready` on posedge and sample handshakes on negedge.
 - After changing RTL or TBs, re-run `python sim/run.py --all` and confirm it ends with `N/N passed`.

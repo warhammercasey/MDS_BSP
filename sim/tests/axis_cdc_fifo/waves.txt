@@ -1,0 +1,31 @@
+# GTKWave signals for the axis_cdc_fifo test. Paths are relative to tb_axis_cdc_fifo.
+# Shows clk_io -> clk_core (pair 10), the direction cain_top uses.
+# Format: see sim/waves.py. Pair numbers are listed in sim/common/cain_clocks_pkg.sv.
+
+group Write side (clk_io)
+    g_pair[10].h.clka
+    g_pair[10].h.rstna
+    g_pair[10].h.in_valid
+    g_pair[10].h.in_ready
+    g_pair[10].h.in_payload     hex
+end
+
+group Read side (clk_core)
+    g_pair[10].h.clkb
+    g_pair[10].h.rstnb
+    g_pair[10].h.out_valid
+    g_pair[10].h.out_ready
+    g_pair[10].h.out_payload    hex
+end
+
+group FIFO internals
+    g_pair[10].h.g_dut.dut.*pointer*  hex
+    g_pair[10].h.g_dut.dut.count*     dec
+end
+
+group Test state
+    g_pair[10].h.n_sent         dec
+    g_pair[10].h.n_recv         dec
+    g_pair[10].h.src_rate       dec
+    g_pair[10].h.sink_rate      dec
+end

@@ -1,14 +1,13 @@
 module axis_tid_cdc_fifo #(
     parameter WIDTH  = 8, // Data width
     parameter ID_WIDTH = 4,
-    parameter AWIDTH = 4, // Address width. FIFO size is 2^AWIDTH
-    parameter CLK_RATIO = 2,
-    parameter FAST_TO_SLOW = 0 // Set to 1 for fast to slow CDC
+    parameter AWIDTH = 4 // Address width. FIFO size is 2^AWIDTH
 ) (
     input  logic clka,
-    input  logic rstn, // On clka domain
+    input  logic rstna, // On clka domain
     
     input  logic clkb,
+    input  logic rstnb,
 
     axis_tid_if.slv axis_in,
     axis_tid_if.mst axis_out
@@ -33,13 +32,12 @@ module axis_tid_cdc_fifo #(
 
     axis_cdc_fifo #(
         .WIDTH(WIDTH + ID_WIDTH),
-        .AWIDTH(AWIDTH), // Address width. FIFO size is 2^AWIDTH
-        .CLK_RATIO(CLK_RATIO),
-        .FAST_TO_SLOW(FAST_TO_SLOW) // Set to 1 for fast to slow CDC
+        .AWIDTH(AWIDTH) // Address width. FIFO size is 2^AWIDTH
     ) axis_cdc_fifo_i (
         .clka(clka),
-        .rstn(rstn),
+        .rstna(rstna),
         .clkb(clkb),
+        .rstnb(rstnb),
 
         .axis_in(axis_comb_in),
         .axis_out(axis_comb_out)

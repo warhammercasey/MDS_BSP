@@ -1,0 +1,22 @@
+# GTKWave signals for the two_port_bram test. Paths are relative to tb_two_port_bram.
+# Format: see sim/waves.py. Pair numbers are listed in sim/common/cain_clocks_pkg.sv.
+
+group Port A (clk_io)
+    g_pair[10].h.clka
+    g_pair[10].h.dut.ena
+    g_pair[10].h.dut.wea
+    g_pair[10].h.dut.addra      dec
+    g_pair[10].h.dut.dina       hex
+    g_pair[10].h.dut.douta      hex
+    g_pair[10].h.mode[0]        dec
+end
+
+group Port B (clk_core)
+    g_pair[10].h.clkb
+    g_pair[10].h.dut.enb
+    g_pair[10].h.dut.web
+    g_pair[10].h.dut.addrb      dec
+    g_pair[10].h.dut.dinb       hex
+    g_pair[10].h.dut.doutb      hex
+    g_pair[10].h.mode[1]        dec
+end
