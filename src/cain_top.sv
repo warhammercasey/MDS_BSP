@@ -71,6 +71,12 @@ module cain_top (
     localparam I2S_BITS      = 18; // Data format is 24-bit but only 18 bits are used
     localparam ADC_CHANNELS  = 8;
 
+    localparam real LED_CLK_FREQ = CLK_50_FREQ;
+    localparam real LED_PWM_FREQ = 1000.0; // Hz
+    localparam real LED_CUBE_PERIOD = 4.0; // Seconds
+    localparam LED_PWM_TIM_WIDTH = $clog2(CLK_50_FREQ / LED_PWM_FREQ);
+    localparam LED_INC_TIM_WIDTH = $clog2(LED_CUBE_PERIOD/((1 << LED_PWM_TIM_WIDTH)*6.0/LED_CLK_FREQ));
+
     logic rstn_50, rstn_core, rstn_sram, rstn_io;
     reset_sync #(
         .NUM_CLKS(4)
@@ -88,8 +94,16 @@ module cain_top (
     // tristated (OE = 0) with OUT parked low.
     // ------------------------------------------------------------------
 
-    // RGB LED - off (assumes active-high drive)
-    assign rgb_led       = 3'b000;
+    // LED Cube
+    led_cube #(
+        .PWM_TIM_WIDTH(LED_PWM_TIM_WIDTH),
+        .INC_TIM_WIDTH(LED_INC_TIM_WIDTH)
+    ) led_cube_i (
+        .clk(clk_50),
+        .rstn(rstn_50),
+
+        .led_out(rgb_led)
+    );
 
     // GPIOs - tristated
     assign gpio_OUT      = 8'h00;

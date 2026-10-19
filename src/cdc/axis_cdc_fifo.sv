@@ -88,22 +88,19 @@ module axis_cdc_fifo #(
     );
 
 
-    two_port_bram #(
+    simple_dual_port_bram #(
         .WIDTH(WIDTH),
         .AWIDTH(AWIDTH)
-    ) two_port_bram_i (
+    ) simple_dual_port_bram_i (
         .clka   (clka),
         .wea    (axis_in.tvalid && axis_in.tready),
         .ena    (1'b1),
         .addra  (wr_pointer_a),
         .dina   (axis_in.tdata),
-        .douta  (),
     
         .clkb   (clkb),
-        .web    (1'b0),
         .enb    (1'b1),
         .addrb  (rd_pointer_next_b),
-        .dinb   ('0),
         .doutb  (axis_out.tdata)
     );
 

@@ -20,6 +20,9 @@
         <efx:design_file name="../src/cdc/ff_sync.sv" version="default" library="default"/>
         <efx:design_file name="../src/cdc/pulse_cdc.sv" version="default" library="default"/>
         <efx:design_file name="../src/cdc/axis_cdc_fifo.sv" version="default" library="default"/>
+        <efx:design_file name="../src/led_cube.sv" version="default" library="default"/>
+        <efx:design_file name="../src/reset_sync.sv" version="default" library="default"/>
+        <efx:design_file name="../src/cdc/simple_dual_port_bram.sv" version="default" library="default"/>
         <efx:top_vhdl_arch name=""/>
         <efx:msg_config name=""/>
         <efx:partition_definitions name=""/>
