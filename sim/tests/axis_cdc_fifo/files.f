@@ -3,7 +3,7 @@
 
 src/interfaces/axis_if.sv
 src/cdc/ff_sync.sv
-src/cdc/two_port_bram.sv
+src/cdc/simple_dual_port_bram.sv
 src/cdc/axis_cdc_fifo.sv
 src/cdc/axis_tid_cdc_fifo.sv
 

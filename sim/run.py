@@ -368,14 +368,15 @@ def load_results() -> list[Result]:
 
 
 def format_report(results: list[Result]) -> str:
-    hdr = f"{'TEST':<20} {'STATUS':<11} {'CHECKS':>7} {'ERRORS':>7} {'WARNS':>6} {'BUILD':>7} {'SIM':>7}  LAST RUN"
+    w = max([20] + [len(r.test) for r in results])
+    hdr = f"{'TEST':<{w}} {'STATUS':<11} {'CHECKS':>7} {'ERRORS':>7} {'WARNS':>6} {'BUILD':>7} {'SIM':>7}  LAST RUN"
     lines = [hdr, "-" * len(hdr)]
     for r in results:
         if r.status == "NOT_RUN":
-            lines.append(f"{r.test:<20} {'NOT_RUN':<11}")
+            lines.append(f"{r.test:<{w}} {'NOT_RUN':<11}")
             continue
         lines.append(
-            f"{r.test:<20} {r.status:<11} {r.checks:>7} {r.errors:>7} {r.warnings:>6} "
+            f"{r.test:<{w}} {r.status:<11} {r.checks:>7} {r.errors:>7} {r.warnings:>6} "
             f"{r.build_s:>6.1f}s {r.sim_s:>6.1f}s  {r.timestamp}"
         )
     ran = [r for r in results if r.status != "NOT_RUN"]

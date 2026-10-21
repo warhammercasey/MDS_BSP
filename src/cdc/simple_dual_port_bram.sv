@@ -16,7 +16,7 @@ module simple_dual_port_bram #(
 
     logic [WIDTH-1:0] ram[1 << AWIDTH];
 
-    always_ff @(posedge clka) begin
+    always @(posedge clka) begin
         if(ena) begin
             if(wea) begin
                 ram[addra] <= dina;
@@ -25,7 +25,7 @@ module simple_dual_port_bram #(
     end
 
 
-    always_ff @(posedge clkb) begin
+    always @(posedge clkb) begin
         if(enb) begin
             doutb <= ram[addrb];
         end

@@ -49,8 +49,7 @@ module cain_top (
     output       rmii_mdio_OUT,
     output       rmii_mdio_OE,
 
-    // QSPI SRAM interface
-    output        qspi_sck,
+    // QSPI SRAM interface (qspi_sck is a clkout GPIO driven by clk_sram in the Interface Designer)
     input  [3:0]  qspi_sio_IN,
     output [3:0]  qspi_sio_OUT,
     output [3:0]  qspi_sio_OE,
@@ -64,6 +63,9 @@ module cain_top (
 
     localparam UART_BAUD     = 115200; // 115200 baud rate
 
+    localparam APB_ADDR_WIDTH = 8;
+    localparam APB_NUM_PERIPH = 1;      // Peripherals on the APB bus (psel lines)
+
     localparam ADC_BITS      = 8;
     localparam ADC_SAMPLE_RATE = 200_000; // 100 kHz sample rate
 
@@ -74,8 +76,8 @@ module cain_top (
     localparam real LED_CLK_FREQ = CLK_50_FREQ;
     localparam real LED_PWM_FREQ = 1000.0; // Hz
     localparam real LED_CUBE_PERIOD = 4.0; // Seconds
-    localparam LED_PWM_TIM_WIDTH = $clog2(CLK_50_FREQ / LED_PWM_FREQ);
-    localparam LED_INC_TIM_WIDTH = $clog2(LED_CUBE_PERIOD/((1 << LED_PWM_TIM_WIDTH)*6.0/LED_CLK_FREQ));
+    localparam LED_PWM_TIM_WIDTH = $clog2(int'(CLK_50_FREQ / LED_PWM_FREQ));
+    localparam LED_INC_TIM_WIDTH = $clog2(int'(LED_CUBE_PERIOD/((1 << LED_PWM_TIM_WIDTH)*6.0/LED_CLK_FREQ)));
 
     logic rstn_50, rstn_core, rstn_sram, rstn_io;
     reset_sync #(
@@ -169,28 +171,48 @@ module cain_top (
     assign adc_axis.tready = 1'b1;
     
 
-    // UART
-    axis_if #(
-        .WIDTH(8)
-    ) uart_tx_if ();
-    axis_if #(
-        .WIDTH(8)
-    ) uart_rx_if ();
-    uart #(
+    // UART console, master of the APB bus. Registers are read and written from the
+    // console with "r <sel> <addr>" and "w <sel> <addr> <data>" (see uart_controller.sv)
+    apb_if #(
+        .ADDR_WIDTH(APB_ADDR_WIDTH),
+        .DATA_WIDTH(8),
+        .SEL_WIDTH(APB_NUM_PERIPH)
+    ) apb_bus ();
+    uart_controller #(
         .CLK_FREQ(CLK_IO_FREQ),
-        .BAUD(UART_BAUD)
-    ) uart_i (
+        .BAUD(UART_BAUD),
+        .APB_ADDR_WIDTH(APB_ADDR_WIDTH),
+        .APB_SEL_WIDTH(APB_NUM_PERIPH)
+    ) uart_controller_i (
         .clk(clk_io),
         .rstn(rstn_io),
-        .tx(uart_tx),
         .rx(uart_rx),
-        .axis_tx(uart_tx_if),
-        .axis_rx(uart_rx_if)
+        .tx(uart_tx),
+        .apb(apb_bus)
     );
 
-    assign uart_tx_if.tvalid = uart_rx_if.tvalid;
-    assign uart_tx_if.tdata = uart_rx_if.tdata;
-    assign uart_rx_if.tready = uart_tx_if.tready;
+    // One APB bus per peripheral, indexed by <sel>. All on clk_io.
+    apb_if #(
+        .ADDR_WIDTH(APB_ADDR_WIDTH),
+        .DATA_WIDTH(8),
+        .SEL_WIDTH(1)
+    ) apb_periph [APB_NUM_PERIPH] ();
+    apb_splitter #(
+        .DATA_WIDTH(8),
+        .N(APB_NUM_PERIPH)
+    ) apb_splitter_i (
+        .apb_in(apb_bus),
+        .apb_out(apb_periph)
+    );
+
+    // No peripherals yet: every transfer ends with PSLVERR, so the console prints ERR
+    generate
+        for (genvar i = 0; i < APB_NUM_PERIPH; i++) begin : g_apb_tieoff
+            assign apb_periph[i].pready  = 1'b1;
+            assign apb_periph[i].pslverr = 1'b1;
+            assign apb_periph[i].prdata  = '0;
+        end
+    endgenerate
 
 
     // FTDI bit-bang - tristated
@@ -206,7 +228,6 @@ module cain_top (
     assign rmii_mdio_OE  = 1'b0;
 
     // QSPI SRAM
-    assign qspi_sck = clk_sram;
     sram_controller sram_controller_i(
         .clk(clk_sram),
         .rstn(rstn_sram),

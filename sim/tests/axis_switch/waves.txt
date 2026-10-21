@@ -1,0 +1,31 @@
+# GTKWave signals for the axis_switch test. Paths are relative to tb_axis_switch.
+# Shows the N=3 instance (g_n[0..4] are N = 1, 2, 3, 4, 8).
+# Format: see sim/waves.py
+
+clk
+g_n[2].h.rstn
+
+group Inputs
+    g_n[2].h.in_valid       bin
+    g_n[2].h.in_ready       bin
+    g_n[2].h.in_data*       hex
+end
+
+group Arbiter
+    g_n[2].h.dut.grant_valid
+    g_n[2].h.dut.grant_idx  dec
+    g_n[2].h.dut.last_grant dec
+    g_n[2].h.dut.load
+end
+
+group Output
+    g_n[2].h.axis_out.tvalid
+    g_n[2].h.axis_out.tready
+    g_n[2].h.axis_out.tdata hex
+end
+
+group Test state
+    g_n[2].h.sink_rate      dec
+    g_n[2].h.gap_min        dec
+    g_n[2].h.n_recv         dec
+end

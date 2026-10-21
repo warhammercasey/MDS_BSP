@@ -19,7 +19,7 @@ module two_port_bram #(
 
     logic [WIDTH-1:0] ram [1 << AWIDTH];
 
-    always_ff @(posedge clka) begin
+    always @(posedge clka) begin
         if(ena) begin
             if(wea) begin
                 ram[addra] <= dina;
@@ -29,7 +29,7 @@ module two_port_bram #(
         end
     end
     
-    always_ff @(posedge clkb) begin
+    always @(posedge clkb) begin
         if(enb) begin
             if(web) begin
                 ram[addrb] <= dinb;

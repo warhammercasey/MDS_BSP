@@ -1,0 +1,41 @@
+# GTKWave signals for the apb_cdc test: pair 10 (clk_io -> clk_core), the same pair
+# the other CDC tests show. Paths are relative to tb_apb_cdc.
+# Format: see sim/waves.py
+
+group Master side (clka = clk_io)
+    g_pair[10].h.clka
+    g_pair[10].h.rstna
+    g_pair[10].h.apb_a.psel
+    g_pair[10].h.apb_a.penable
+    g_pair[10].h.apb_a.pwrite
+    g_pair[10].h.apb_a.paddr
+    g_pair[10].h.apb_a.pwdata
+    g_pair[10].h.apb_a.pready
+    g_pair[10].h.apb_a.prdata
+    g_pair[10].h.apb_a.pslverr
+end
+
+group Handshake
+    g_pair[10].h.dut.issue
+    g_pair[10].h.dut.issued
+    g_pair[10].h.dut.req_tgl
+    g_pair[10].h.dut.req_tgl_b
+    g_pair[10].h.dut.ack_tgl
+    g_pair[10].h.dut.ack_tgl_a
+    g_pair[10].h.dut.pending_a
+    g_pair[10].h.dut.done_a
+end
+
+group Peripheral side (clkb = clk_core)
+    g_pair[10].h.clkb
+    g_pair[10].h.rstnb
+    g_pair[10].h.dut.state_b
+    g_pair[10].h.apb_b.psel
+    g_pair[10].h.apb_b.penable
+    g_pair[10].h.apb_b.pwrite
+    g_pair[10].h.apb_b.paddr
+    g_pair[10].h.apb_b.pwdata
+    g_pair[10].h.apb_b.pready
+    g_pair[10].h.apb_b.prdata
+    g_pair[10].h.apb_b.pslverr
+end

@@ -1,0 +1,44 @@
+# GTKWave signals for the uart_controller test. Paths are relative to tb_uart_controller.
+# Format: see sim/waves.py
+
+clk
+rstn
+
+group Serial pins
+    rx
+    tx
+end
+
+group Parser
+    dut.uart_rx_if.tvalid
+    dut.uart_rx_if.tready
+    dut.uart_rx_if.tdata    ascii
+    dut.state
+    dut.field
+    dut.acc
+    dut.acc_ovf
+    dut.is_write
+    dut.sel_r
+    dut.addr_r
+    dut.data_r
+end
+
+group APB
+    apb.psel
+    apb.penable
+    apb.pwrite
+    apb.paddr
+    apb.pwdata
+    apb.pready
+    apb.prdata
+    apb.pslverr
+end
+
+group Response
+    dut.resp
+    dut.resp_idx
+    dut.uart_tx_inputs[1].tdata  ascii
+    dut.uart_tx_if.tvalid
+    dut.uart_tx_if.tready
+    dut.uart_tx_if.tdata     ascii
+end

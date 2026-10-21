@@ -11,6 +11,16 @@ module uart_rx #(
     localparam CLK_PER_BIT = CLK_FREQ/BAUD;
     localparam CLK_PER_BIT_2 = CLK_PER_BIT/2;
 
+    logic rx_synced;
+    ff_sync #(
+        .WIDTH(1)
+    ) rx_sync (
+        .clka(clk),
+        .clkb(clk),
+        .din(rx),
+        .dout(rx_synced)
+    );
+
     // Start module on falling edge of the rx line
     logic enable, done;
     always_ff @(posedge clk) begin
@@ -19,7 +29,7 @@ module uart_rx #(
         end else begin
             if(done) begin
                 enable <= 1'b0;
-            end else if(~rx && $past(rx)) begin
+            end else if(~rx_synced && $past(rx_synced)) begin
                 enable <= 1'b1;
             end
         end
@@ -55,7 +65,7 @@ module uart_rx #(
             rx_data <= '0;
         end else begin
             if(bit_latch) begin
-                rx_data <= {rx, rx_data[7:1]};
+                rx_data <= {rx_synced, rx_data[7:1]};
             end
         end
     end

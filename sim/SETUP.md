@@ -100,13 +100,16 @@ Verilator flags (in `run.py`): `--binary --timing --timescale 1ns/1ps -Wno-fatal
 
 ## 6. Things that will bite you
 
-- **Clock and rate constants are copied by hand** from `src/cain_top.sv` into each testbench. They must match, or a TB will test a configuration the design doesn't use. Currently every TB uses `CLK_FREQ = 73_571_400` (cain_top's `CLK_IO_FREQ`), and `tb_adc.sv` uses `SAMPLE_RATE = 100_000` (cain_top's `ADC_SAMPLE_RATE`). `tb_i2s.sv` deliberately does **not** set `I2S_CLK`; it uses the DUT's default. If `cain_top` changes, update the TBs to match.
+- **Clock and rate constants are copied by hand** from `src/cain_top.sv` into each testbench. They must match, or a TB will test a configuration the design doesn't use. Currently every TB uses `CLK_FREQ = 73_571_400` (cain_top's `CLK_IO_FREQ`), and `tb_adc.sv` uses `SAMPLE_RATE = 100_000` (cain_top's `ADC_SAMPLE_RATE`). `tb_i2s.sv` deliberately does **not** set `I2S_CLK`; it uses the DUT's default. `tb_uart_controller.sv` deliberately runs at 921600 baud instead of `UART_BAUD` to keep the sim short; `tb_uart.sv` covers the real baud. If `cain_top` changes, update the TBs to match.
 - **Editor diagnostics are false positives.** The IDE linter reports `tb_macros.svh` not found and `tb_pkg` undefined because it doesn't know about `+incdir+sim/common` or `COMMON_SOURCES`. Only Verilator's output counts.
 - **Verilator 5.020 limits** we have already hit in TB code:
   - No hierarchical type references (e.g. `adc_chip.conv_t`). Declare the type locally or use a package.
   - An assignment pattern (`'{...}`) can't be passed directly to `queue.push_back()`. Assign it to a variable first.
   - Initialized local variables inside `always`/`initial` blocks must be declared `automatic`.
   - Intra-assignment NBA delays (`x <= #(T) y;`) do work.
+  - `++`/`--` inside an expression (`if (++i == n)`) is unsupported; increment as its own statement.
+  - Indexing an array of queues (`q[N][$]`) with a value that might be out of range builds in Verilator but produces C++ that doesn't compile (`operands to '?:' have different types`). Size the array to a power of two and index it with a matching-width value.
+  - `two_port_bram` gives a `MULTIDRIVEN` warning per instance, because two clocked blocks write its RAM array. That is the intended true dual-port structure (it matches Efinity's template), so the warning is expected.
 - **Testbench stimulus in `initial` blocks:** Verilator runs `x <= y` inside an `initial` block as a *blocking* assignment, which races with the DUT's flops. Drive DUT inputs on the opposite clock edge (`@(negedge clk) x = y;`), or from an `always @(posedge clk)` block, where `<=` works normally.
 - **Clocks in generate loops:** driving elements of an unpacked clock array from per-iteration `initial` blocks did not toggle under Verilator 5.020. Use a module instance per clock instead (`sim/models/clk_gen.sv`).
 - **CDC tests** run one DUT per ordered pair of the 4 clock domains (see README.md, "CDC tests"). Frequencies live in `sim/common/cain_clocks_pkg.sv` and must match `cain_top`.
