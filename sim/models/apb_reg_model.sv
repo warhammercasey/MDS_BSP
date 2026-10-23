@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 `include "tb_macros.svh"
 
-// APB peripheral with 8-bit registers, for testing APB masters and bridges.
+// APB peripheral with DATA_WIDTH-bit registers, for testing APB masters and bridges.
 //   - registers at 0..SIZE-1, random initial contents (read them through `mem`)
 //   - PSLVERR at SIZE and above
 //   - pready never rises at HANG_FROM and above, to test a master's timeout
@@ -11,6 +11,7 @@
 // HANG_FROM address.
 module apb_reg_model #(
     parameter int ADDR_WIDTH = 8,
+    parameter int DATA_WIDTH = 8,                // up to 32
     parameter int SIZE       = 16,               // registers at 0..SIZE-1, PSLVERR above
     parameter int MAX_WAIT   = 0,                // wait states: random 0..MAX_WAIT per transfer
     parameter int HANG_FROM  = 1 << ADDR_WIDTH   // from this address up, pready never rises
@@ -21,14 +22,14 @@ module apb_reg_model #(
 );
     import tb_pkg::*;
 
-    logic [7:0] mem [SIZE];
-    initial foreach (mem[a]) mem[a] = 8'($urandom);
+    logic [DATA_WIDTH-1:0] mem [SIZE];
+    initial foreach (mem[a]) mem[a] = DATA_WIDTH'($urandom);
 
     int unsigned           wait_left = 0;
     bit                    active = 1'b0; // between the setup phase and the end of the transfer
     logic [ADDR_WIDTH-1:0] t_addr;
     logic                  t_write;
-    logic [7:0]            t_wdata;
+    logic [DATA_WIDTH-1:0] t_wdata;
 
     logic in_range, hang;
     assign in_range = int'(apb.paddr) < SIZE;
@@ -36,7 +37,7 @@ module apb_reg_model #(
 
     assign apb.pready  = apb.psel[0] && apb.penable && wait_left == 0 && !hang;
     assign apb.pslverr = apb.pready && !in_range;
-    assign apb.prdata  = (apb.pready && in_range) ? mem[int'(apb.paddr) % SIZE] : 8'h00;
+    assign apb.prdata  = (apb.pready && in_range) ? mem[int'(apb.paddr) % SIZE] : '0;
 
     always @(posedge clk) begin
         if (!rstn) begin

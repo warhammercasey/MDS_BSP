@@ -64,6 +64,7 @@ module cain_top (
     localparam UART_BAUD     = 115200; // 115200 baud rate
 
     localparam APB_ADDR_WIDTH = 8;
+    localparam APB_DATA_WIDTH = 16;     // Ethernet PHY (SMI) registers are 16-bit
     localparam APB_NUM_PERIPH = 1;      // Peripherals on the APB bus (psel lines)
 
     localparam ADC_BITS      = 8;
@@ -175,13 +176,14 @@ module cain_top (
     // console with "r <sel> <addr>" and "w <sel> <addr> <data>" (see uart_controller.sv)
     apb_if #(
         .ADDR_WIDTH(APB_ADDR_WIDTH),
-        .DATA_WIDTH(8),
+        .DATA_WIDTH(APB_DATA_WIDTH),
         .SEL_WIDTH(APB_NUM_PERIPH)
     ) apb_bus ();
     uart_controller #(
         .CLK_FREQ(CLK_IO_FREQ),
         .BAUD(UART_BAUD),
         .APB_ADDR_WIDTH(APB_ADDR_WIDTH),
+        .APB_DATA_WIDTH(APB_DATA_WIDTH),
         .APB_SEL_WIDTH(APB_NUM_PERIPH)
     ) uart_controller_i (
         .clk(clk_io),
@@ -194,11 +196,11 @@ module cain_top (
     // One APB bus per peripheral, indexed by <sel>. All on clk_io.
     apb_if #(
         .ADDR_WIDTH(APB_ADDR_WIDTH),
-        .DATA_WIDTH(8),
+        .DATA_WIDTH(APB_DATA_WIDTH),
         .SEL_WIDTH(1)
     ) apb_periph [APB_NUM_PERIPH] ();
     apb_splitter #(
-        .DATA_WIDTH(8),
+        .DATA_WIDTH(APB_DATA_WIDTH),
         .N(APB_NUM_PERIPH)
     ) apb_splitter_i (
         .apb_in(apb_bus),

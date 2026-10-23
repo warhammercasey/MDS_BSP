@@ -12,7 +12,8 @@
 // reference copy of the registers. Also checked: the number of APB transfers per line
 // (none for a malformed line), the APB protocol, and the registers' final contents.
 //
-// The baud rate is 921600 rather than cain_top's 115200 to keep the sim short. The
+// The bus has cain_top's 16-bit data width, so reads print 4 hex digits. The baud
+// rate is 921600 rather than cain_top's 115200 to keep the sim short. The
 // controller's logic doesn't depend on it, and the uart test covers 115200.
 
 module tb_uart_controller;
@@ -24,6 +25,9 @@ module tb_uart_controller;
     localparam real BIT_PERIOD_NS = 1.0e9 / BAUD;
 
     localparam int ADDR_WIDTH  = 8;
+    localparam int DATA_WIDTH  = 16;            // cain_top APB_DATA_WIDTH
+    localparam int DATA_MAX    = (1 << DATA_WIDTH) - 1;
+    localparam int DATA_CHARS  = (DATA_WIDTH + 3) / 4; // hex digits in a read response
     localparam int NUM_PERIPH  = 3;
     localparam int APB_TIMEOUT = 256;
     localparam int SIZE      [NUM_PERIPH] = '{16, 256, 4};
@@ -53,13 +57,14 @@ module tb_uart_controller;
 
     always #(CLK_PERIOD_NS/2) clk = ~clk;
 
-    apb_if #(.ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(8), .SEL_WIDTH(NUM_PERIPH)) apb ();
-    apb_if #(.ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(8), .SEL_WIDTH(1)) apb_periph [NUM_PERIPH] ();
+    apb_if #(.ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH), .SEL_WIDTH(NUM_PERIPH)) apb ();
+    apb_if #(.ADDR_WIDTH(ADDR_WIDTH), .DATA_WIDTH(DATA_WIDTH), .SEL_WIDTH(1)) apb_periph [NUM_PERIPH] ();
 
     uart_controller #(
         .CLK_FREQ(CLK_FREQ),
         .BAUD(BAUD),
         .APB_ADDR_WIDTH(ADDR_WIDTH),
+        .APB_DATA_WIDTH(DATA_WIDTH),
         .APB_SEL_WIDTH(NUM_PERIPH),
         .APB_TIMEOUT(APB_TIMEOUT)
     ) dut (
@@ -71,7 +76,7 @@ module tb_uart_controller;
     );
 
     apb_splitter #(
-        .DATA_WIDTH(8),
+        .DATA_WIDTH(DATA_WIDTH),
         .N(NUM_PERIPH)
     ) splitter (
         .apb_in(apb),
@@ -81,12 +86,13 @@ module tb_uart_controller;
     // ------------------------------------------------------------------
     // Peripherals and the reference copy of their registers
     // ------------------------------------------------------------------
-    logic [7:0] ref_mem [NUM_PERIPH][256];
+    logic [DATA_WIDTH-1:0] ref_mem [NUM_PERIPH][256];
     bit         check_mem = 1'b0;
 
     for (genvar i = 0; i < NUM_PERIPH; i++) begin : g_p
         apb_reg_model #(
             .ADDR_WIDTH(ADDR_WIDTH),
+            .DATA_WIDTH(DATA_WIDTH),
             .SIZE(SIZE[i]),
             .MAX_WAIT(MAX_WAIT[i]),
             .HANG_FROM(HANG_FROM[i])
@@ -217,16 +223,18 @@ module tb_uart_controller;
     function automatic string expect_cmd(bit wr, int sel, int addr, int data, output int unsigned napb);
         string s;
         napb = 0;
-        if (sel >= NUM_PERIPH || addr >= 256 || (wr && data >= 256))
+        if (sel >= NUM_PERIPH || addr >= 256 || (wr && data > DATA_MAX))
             return "ERR";   // field doesn't fit: no transfer
         napb = 1;
         if (addr >= HANG_FROM[sel] || addr >= SIZE[sel])
             return "ERR";   // timeout or PSLVERR
         if (wr) begin
-            ref_mem[sel][addr] = 8'(data);
+            ref_mem[sel][addr] = DATA_WIDTH'(data);
             return "OK";
         end
-        s = $sformatf("%02h", ref_mem[sel][addr]);
+        s = $sformatf("%0h", ref_mem[sel][addr]);
+        while (s.len() < DATA_CHARS)
+            s = {"0", s};
         return s.toupper();
     endfunction
 
@@ -281,7 +289,7 @@ module tb_uart_controller;
         automatic bit    wr   = 1'($urandom);
         automatic int    sel  = $urandom_range(NUM_PERIPH - 1);
         automatic int    addr = $urandom_range(SIZE[sel] - 1);
-        automatic int    data = $urandom_range(255);
+        automatic int    data = $urandom_range(DATA_MAX);
         automatic int    kind = $urandom_range(9);
         automatic string eol  = rand_eol();
         automatic string bad_chars = "Gz#-,\177";
@@ -293,7 +301,7 @@ module tb_uart_controller;
                 case ($urandom_range(2))
                     0:       sel  = $urandom_range(255, NUM_PERIPH);
                     1:       addr = $urandom_range(4095, 256);
-                    default: begin wr = 1'b1; data = $urandom_range(4095, 256); end
+                    default: begin wr = 1'b1; data = $urandom_range(16 * DATA_MAX + 15, DATA_MAX + 1); end
                 endcase
             end
             default: ;
@@ -333,6 +341,12 @@ module tb_uart_controller;
         cmd("r 2 3",     0, 2, 'h3);
         cmd("w 2 0 81",  1, 2, 'h0, 'h81);
         cmd("r 2 0",     0, 2, 'h0);
+        cmd("w 0 05 BEEF", 1, 0, 'h05, 'hBEEF);
+        cmd("r 0 05",      0, 0, 'h05);
+        cmd("w 1 80 8001", 1, 1, 'h80, 'h8001);
+        cmd("r 1 80",      0, 1, 'h80);
+        cmd("w 1 81 7ffe", 1, 1, 'h81, 'h7FFE);
+        cmd("r 1 81",      0, 1, 'h81);
 
         tb_info("Test 2: formatting");
         cmd("R 0 3",                    0, 0, 'h3);
@@ -377,13 +391,18 @@ module tb_uart_controller;
         tb_info("Test 5: fields too big for the bus");
         cmd("r 3 00",     0, 3,  'h0);
         cmd("r F 00",     0, 15, 'h0);
-        cmd("r 0 100",    0, 0,  'h100);
-        cmd("w 0 00 100", 1, 0,  'h0, 'h100);
-        cmd("w 0 00 1FF", 1, 0,  'h0, 'h1FF);
+        cmd("r 0 100",      0, 0,  'h100);
+        cmd("w 0 00 FFFF",  1, 0,  'h0, 'hFFFF);    // the widest data that fits
+        cmd("r 0 00",       0, 0,  'h0);
+        cmd("w 0 00 0FFFF", 1, 0,  'h0, 'hFFFF);
+        cmd("w 0 00 10000", 1, 0,  'h0, 'h10000);
+        cmd("w 0 00 1FFFF", 1, 0,  'h0, 'h1FFFF);
+        cmd("r 0 00",       0, 0,  'h0);            // unchanged by the two above
         // Overflows that would wrap to a valid value if the dropped digits were ignored
         bad("r 0 100000000000003");
         bad("r 1000000000000000000 3");
         bad("w 0 3 10000000000000000DE");
+        bad("w 0 3 100000000000000BEEF");
         cmd("r 0 3", 0, 0, 'h3);
 
         tb_info("Test 6: PSLVERR and timeout");

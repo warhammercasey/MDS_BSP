@@ -65,7 +65,7 @@ endmodule
 
 3. Optional: list the signals to show in GTKWave in `sim/tests/<name>/waves.txt` (see below).
 
-Reusable models of external devices go in `sim/models/`; add them to a test's `files.f`. For example, `adc088s022_model.sv` (ADC, SPI) and `sph0645_model.sv` (I2S microphone) are models built from the chips' datasheets, and they check interface timing. `apb_reg_model.sv` is a generic APB register block (wait states, PSLVERR, an address range that never responds) that checks the APB protocol. For a check that can fire often or from many instances, use `tb_error_once(key, msg)`: it reports the first occurrence and counts the rest.
+Reusable models of external devices go in `sim/models/`; add them to a test's `files.f`. For example, `adc088s022_model.sv` (ADC, SPI), `sph0645_model.sv` (I2S microphone) and `lan8720a_model.sv` (Ethernet PHY: MDC/MDIO management and its registers) are models built from the chips' datasheets, and they check interface timing. `apb_reg_model.sv` is a generic APB register block (wait states, PSLVERR, an address range that never responds) that checks the APB protocol. For a check that can fire often or from many instances, use `tb_error_once(key, msg)`: it reports the first occurrence and counts the rest.
 
 ### CDC tests
 

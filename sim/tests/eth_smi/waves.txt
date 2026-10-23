@@ -1,0 +1,51 @@
+# GTKWave signals for the eth_smi test. Paths are relative to tb_eth_smi.
+# Format: see sim/waves.py
+
+clk
+rstn
+
+group APB
+    apb.psel
+    apb.penable
+    apb.pwrite
+    apb.paddr     dec
+    apb.pwdata
+    apb.pready
+    apb.prdata
+    apb.pslverr
+end
+
+group SMI pins
+    mdc
+    mdio
+    mdio_OE
+    mdio_OUT
+    phy_mdio_oe
+    phy_mdio_out
+end
+
+group PHY model (frame as received)
+    phy_nrst
+    phy.fstate
+    phy.ones        dec
+    phy.nbits       dec
+    phy.f_write
+    phy.f_phyad     dec
+    phy.f_regad     dec
+    phy.f_data
+    phy.phy_slot
+end
+
+group DUT internals
+    dut.state
+    dut.next_state
+    dut.two_counter
+    dut.addr_counter   dec
+    dut.data_counter   dec
+    dut.write_active
+    dut.reg_addr       dec
+    dut.write_data
+    dut.read_data
+    dut.mdc_fe
+    dut.mdc_re
+end

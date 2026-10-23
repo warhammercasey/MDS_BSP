@@ -58,6 +58,7 @@ If something fails, read these in order:
 |---|---|
 | `wsl` not found, or the runner hangs at its first command | WSL isn't installed or the distro is stopped/broken. Run `wsl -e true` to check. |
 | `verilator: command not found` | Verilator isn't installed in the default distro. Install it, or set `CAIN_WSL_DISTRO`. |
+| `BUILD_FAIL`, and `build.log` ends with `make: g++: No such file or directory` | Verilator is installed but the compiler isn't. Install `build-essential`; if `sudo` asks for a password, `wsl -u root -e apt-get install -y build-essential` works without one. |
 | `%Error: Unknown option --timing` / `--binary` | Verilator 4.x is installed; Verilator 5 is required. |
 | Build fails in `verilated_timing` / coroutine errors | g++ is too old (needs 10+). |
 | `NO_VERDICT` | The TB exited without calling `tb_finish()`, or it crashed. Check the end of `sim.log`. |
@@ -90,6 +91,7 @@ sim/
   models/             datasheet-based device models with timing checks
     adc088s022_model.sv   TI ADC088S022 (SPI ADC)
     sph0645_model.sv      Knowles SPH0645LM4H-B (I2S mic)
+    lan8720a_model.sv     Microchip LAN8720A (Ethernet PHY: MDC/MDIO and its registers)
   tests/<name>/
     files.f           Verilator filelist: --top-module <tb>, then sources relative to the repo root
     tb_<name>.sv      testbench
@@ -100,7 +102,7 @@ Verilator flags (in `run.py`): `--binary --timing --timescale 1ns/1ps -Wno-fatal
 
 ## 6. Things that will bite you
 
-- **Clock and rate constants are copied by hand** from `src/cain_top.sv` into each testbench. They must match, or a TB will test a configuration the design doesn't use. Currently every TB uses `CLK_FREQ = 73_571_400` (cain_top's `CLK_IO_FREQ`), and `tb_adc.sv` uses `SAMPLE_RATE = 100_000` (cain_top's `ADC_SAMPLE_RATE`). `tb_i2s.sv` deliberately does **not** set `I2S_CLK`; it uses the DUT's default. `tb_uart_controller.sv` deliberately runs at 921600 baud instead of `UART_BAUD` to keep the sim short; `tb_uart.sv` covers the real baud. If `cain_top` changes, update the TBs to match.
+- **Clock and rate constants are copied by hand** from `src/cain_top.sv` into each testbench. They must match, or a TB will test a configuration the design doesn't use. Currently every TB uses `CLK_FREQ = 73_571_400` (cain_top's `CLK_IO_FREQ`), and `tb_adc.sv` uses `SAMPLE_RATE = 100_000` (cain_top's `ADC_SAMPLE_RATE`). `tb_i2s.sv` deliberately does **not** set `I2S_CLK`; it uses the DUT's default. `tb_uart_controller.sv` deliberately runs at 921600 baud instead of `UART_BAUD` to keep the sim short; `tb_uart.sv` covers the real baud. `tb_uart_controller.sv` also copies cain_top's `APB_DATA_WIDTH` (16, for the Ethernet PHY's registers). `tb_eth_smi.sv` derives eth_smi's `MDC_DIV` from `CLK_FREQ`: the smallest even divider that meets the LAN8720A's 400 ns minimum MDC period (30 at clk_io; eth_smi's default of 10 is too fast). If `cain_top` changes, update the TBs to match.
 - **Editor diagnostics are false positives.** The IDE linter reports `tb_macros.svh` not found and `tb_pkg` undefined because it doesn't know about `+incdir+sim/common` or `COMMON_SOURCES`. Only Verilator's output counts.
 - **Verilator 5.020 limits** we have already hit in TB code:
   - No hierarchical type references (e.g. `adc_chip.conv_t`). Declare the type locally or use a package.

@@ -41,3 +41,26 @@ interface axis_tid_if #(
         input  tid
     );
 endinterface
+
+interface axis_tlast_if #(
+    parameter WIDTH = 8
+);
+    logic [WIDTH-1:0] tdata;
+    logic             tvalid;
+    logic             tready;
+    logic             tlast;
+
+    modport mst (
+        output tdata,
+        output tvalid,
+        input  tready,
+        output tlast
+    );
+
+    modport slv (
+        input  tdata,
+        input  tvalid,
+        output tready,
+        input  tlast
+    );
+endinterface
