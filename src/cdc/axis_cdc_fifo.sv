@@ -36,11 +36,24 @@ module axis_cdc_fifo #(
     logic [AWIDTH-1:0] count_a;
     logic [AWIDTH-1:0] count_b;
 
-    assign rd_pointer_a = gray2bin(rd_gray_a);
-    assign wr_pointer_b = gray2bin(wr_gray_b);
+    // Register outputs of gray2bin
+    always_ff @(posedge clka) begin
+        if(~rstna) begin
+            rd_pointer_a <= '0;
+        end else begin
+            rd_pointer_a <= gray2bin(rd_gray_a);
+        end
+    end
+
+    always_ff @(posedge clkb) begin
+        if(~rstnb) begin
+            wr_pointer_b <= '0;
+        end else begin
+            wr_pointer_b <= gray2bin(wr_gray_b);
+        end
+    end
 
     assign count_a = wr_pointer_a - rd_pointer_a;
-    assign count_b = wr_pointer_b - rd_pointer_b;
 
     assign axis_in.tready = count_a < '1;
     always_ff @(posedge clka) begin
@@ -53,7 +66,7 @@ module axis_cdc_fifo #(
         end
     end
 
-    assign axis_out.tvalid = count_b > 0;
+    assign axis_out.tvalid = wr_pointer_b != rd_pointer_b;
     // The RAM read is registered, so it is addressed with the pointer for the next
     // cycle: after a pop, tdata already holds the new head entry.
     assign rd_pointer_next_b = (axis_out.tvalid && axis_out.tready) ? rd_pointer_b + 1 : rd_pointer_b;

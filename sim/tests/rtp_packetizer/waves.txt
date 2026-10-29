@@ -1,0 +1,32 @@
+# GTKWave signals for the rtp_packetizer test. Paths are relative to tb_rtp_packetizer.
+# Shows the 18 bit x 8 channel instance.
+# Format: see sim/waves.py
+
+clk
+g_mic.rstn
+
+group Samples
+    g_mic.axis_in.tvalid
+    g_mic.axis_in.tready
+    g_mic.axis_in.tid           dec
+    g_mic.axis_in.tdata         hex
+end
+
+group Packetizer
+    g_mic.dut.state
+    g_mic.dut.byte_counter      dec
+    g_mic.dut.sample_counter    dec
+    g_mic.dut.channel           dec
+    g_mic.dut.frame_count       dec
+    g_mic.dut.timestamp         dec
+    g_mic.dut.sequence_number   dec
+    g_mic.dut.marker
+    g_mic.dut.resync
+end
+
+group Output
+    g_mic.axis_out.tvalid
+    g_mic.axis_out.tready
+    g_mic.axis_out.tdata        hex
+    g_mic.axis_out.tlast
+end

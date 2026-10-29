@@ -1,0 +1,35 @@
+# GTKWave signals for the apb_width_conv test: the 12/16 -> 6/8 configuration (both
+# truncated). Paths are relative to tb_apb_width_conv.
+# Format: see sim/waves.py
+
+clk
+rstn
+
+group Upstream (12-bit address, 16-bit data)
+    g_cfg[2].h.apb_in.psel
+    g_cfg[2].h.apb_in.penable
+    g_cfg[2].h.apb_in.pwrite
+    g_cfg[2].h.apb_in.paddr
+    g_cfg[2].h.apb_in.pwdata
+    g_cfg[2].h.apb_in.pready
+    g_cfg[2].h.apb_in.prdata
+    g_cfg[2].h.apb_in.pslverr
+end
+
+group Checks
+    g_cfg[2].h.dut.addr_ok
+    g_cfg[2].h.dut.wdata_ok
+    g_cfg[2].h.dut.rdata_ok
+    g_cfg[2].h.dut.req_ok
+end
+
+group Downstream (6-bit address, 8-bit data)
+    g_cfg[2].h.apb_out.psel
+    g_cfg[2].h.apb_out.penable
+    g_cfg[2].h.apb_out.pwrite
+    g_cfg[2].h.apb_out.paddr
+    g_cfg[2].h.apb_out.pwdata
+    g_cfg[2].h.apb_out.pready
+    g_cfg[2].h.apb_out.prdata
+    g_cfg[2].h.apb_out.pslverr
+end

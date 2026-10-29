@@ -1,0 +1,31 @@
+# GTKWave signals for the rmii_tx test. Paths are relative to tb_rmii_tx.
+# Format: see sim/waves.py
+
+clk
+rstn
+
+group Input
+    axis_in.tvalid
+    axis_in.tready
+    axis_in.tdata           hex
+    axis_in.tlast
+end
+
+group Transmitter
+    dut.state
+    dut.bit_counter         dec
+    dut.preamble_counter    dec
+    dut.ipg_counter         dec
+    dut.payload_byte        hex
+    dut.last_payload_byte
+end
+
+group RMII
+    txen
+    txd                     bin
+end
+
+group Monitor
+    n_frames                dec
+    idle_cycles             dec
+end

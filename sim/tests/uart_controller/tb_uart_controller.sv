@@ -12,7 +12,7 @@
 // reference copy of the registers. Also checked: the number of APB transfers per line
 // (none for a malformed line), the APB protocol, and the registers' final contents.
 //
-// The bus has cain_top's 16-bit data width, so reads print 4 hex digits. The baud
+// The bus has cain_top's 32-bit data width, so reads print 8 hex digits. The baud
 // rate is 921600 rather than cain_top's 115200 to keep the sim short. The
 // controller's logic doesn't depend on it, and the uart test covers 115200.
 
@@ -25,8 +25,8 @@ module tb_uart_controller;
     localparam real BIT_PERIOD_NS = 1.0e9 / BAUD;
 
     localparam int ADDR_WIDTH  = 8;
-    localparam int DATA_WIDTH  = 16;            // cain_top APB_DATA_WIDTH
-    localparam int DATA_MAX    = (1 << DATA_WIDTH) - 1;
+    localparam int DATA_WIDTH  = 32;            // cain_top APB_DATA_WIDTH
+    localparam longint DATA_MAX = (64'd1 << DATA_WIDTH) - 1;
     localparam int DATA_CHARS  = (DATA_WIDTH + 3) / 4; // hex digits in a read response
     localparam int NUM_PERIPH  = 3;
     localparam int APB_TIMEOUT = 256;
@@ -220,7 +220,7 @@ module tb_uart_controller;
 
     // Response to a well-formed command, and the number of APB transfers it makes.
     // Updates the reference registers for a write.
-    function automatic string expect_cmd(bit wr, int sel, int addr, int data, output int unsigned napb);
+    function automatic string expect_cmd(bit wr, int sel, int addr, longint data, output int unsigned napb);
         string s;
         napb = 0;
         if (sel >= NUM_PERIPH || addr >= 256 || (wr && data > DATA_MAX))
@@ -239,7 +239,7 @@ module tb_uart_controller;
     endfunction
 
     // A well-formed command
-    task automatic cmd(string line, bit wr, int sel, int addr, int data = 0, string eol = EOL_CR);
+    task automatic cmd(string line, bit wr, int sel, int addr, longint data = 0, string eol = EOL_CR);
         int unsigned napb;
         string       body;
         body = expect_cmd(wr, sel, addr, data, napb);
@@ -261,17 +261,17 @@ module tb_uart_controller;
     endfunction
 
     // Hex in random case, with 0-2 leading zeros
-    function automatic string rand_hex(int v);
+    function automatic string rand_hex(longint v);
         string s = $sformatf("%0h", v);
         repeat ($urandom_range(2)) s = {"0", s};
         return $urandom_range(1) == 1 ? s.toupper() : s;
     endfunction
 
-    function automatic string fmt_cmd(bit wr, int sel, int addr, int data);
+    function automatic string fmt_cmd(bit wr, int sel, int addr, longint data);
         string s = wr ? "w" : "r";
         if ($urandom_range(1) == 1)
             s = s.toupper();
-        s = {spaces(0, 1), s, spaces(1, 2), rand_hex(sel), spaces(1, 2), rand_hex(addr)};
+        s = {spaces(0, 1), s, spaces(1, 2), rand_hex(64'(sel)), spaces(1, 2), rand_hex(64'(addr))};
         if (wr)
             s = {s, spaces(1, 2), rand_hex(data)};
         return {s, spaces(0, 1)};
@@ -289,7 +289,7 @@ module tb_uart_controller;
         automatic bit    wr   = 1'($urandom);
         automatic int    sel  = $urandom_range(NUM_PERIPH - 1);
         automatic int    addr = $urandom_range(SIZE[sel] - 1);
-        automatic int    data = $urandom_range(DATA_MAX);
+        automatic longint data = longint'(DATA_WIDTH'($urandom));
         automatic int    kind = $urandom_range(9);
         automatic string eol  = rand_eol();
         automatic string bad_chars = "Gz#-,\177";
@@ -301,7 +301,7 @@ module tb_uart_controller;
                 case ($urandom_range(2))
                     0:       sel  = $urandom_range(255, NUM_PERIPH);
                     1:       addr = $urandom_range(4095, 256);
-                    default: begin wr = 1'b1; data = $urandom_range(16 * DATA_MAX + 15, DATA_MAX + 1); end
+                    default: begin wr = 1'b1; data |= longint'($urandom_range(15, 1)) << DATA_WIDTH; end
                 endcase
             end
             default: ;
@@ -315,8 +315,8 @@ module tb_uart_controller;
             bad(line, eol);
         end else if (kind == 9) begin
             // Wrong number of fields
-            line = wr ? {"w ", rand_hex(sel), " ", rand_hex(addr)}
-                      : {"r ", rand_hex(sel), " ", rand_hex(addr), " ", rand_hex(data)};
+            line = wr ? {"w ", rand_hex(64'(sel)), " ", rand_hex(64'(addr))}
+                      : {"r ", rand_hex(64'(sel)), " ", rand_hex(64'(addr)), " ", rand_hex(data)};
             bad(line, eol);
         end else begin
             cmd(fmt_cmd(wr, sel, addr, data), wr, sel, addr, data, eol);
@@ -343,10 +343,14 @@ module tb_uart_controller;
         cmd("r 2 0",     0, 2, 'h0);
         cmd("w 0 05 BEEF", 1, 0, 'h05, 'hBEEF);
         cmd("r 0 05",      0, 0, 'h05);
-        cmd("w 1 80 8001", 1, 1, 'h80, 'h8001);
-        cmd("r 1 80",      0, 1, 'h80);
-        cmd("w 1 81 7ffe", 1, 1, 'h81, 'h7FFE);
-        cmd("r 1 81",      0, 1, 'h81);
+        cmd("w 0 06 DEADBEEF", 1, 0, 'h06, 64'hDEADBEEF);
+        cmd("r 0 06",          0, 0, 'h06);
+        cmd("w 1 80 80000001", 1, 1, 'h80, 64'h80000001);
+        cmd("r 1 80",          0, 1, 'h80);
+        cmd("w 1 81 7ffffffe", 1, 1, 'h81, 'h7FFFFFFE);
+        cmd("r 1 81",          0, 1, 'h81);
+        cmd("w 1 82 12345",    1, 1, 'h82, 'h12345);
+        cmd("r 1 82",          0, 1, 'h82);
 
         tb_info("Test 2: formatting");
         cmd("R 0 3",                    0, 0, 'h3);
@@ -392,12 +396,12 @@ module tb_uart_controller;
         cmd("r 3 00",     0, 3,  'h0);
         cmd("r F 00",     0, 15, 'h0);
         cmd("r 0 100",      0, 0,  'h100);
-        cmd("w 0 00 FFFF",  1, 0,  'h0, 'hFFFF);    // the widest data that fits
-        cmd("r 0 00",       0, 0,  'h0);
-        cmd("w 0 00 0FFFF", 1, 0,  'h0, 'hFFFF);
-        cmd("w 0 00 10000", 1, 0,  'h0, 'h10000);
-        cmd("w 0 00 1FFFF", 1, 0,  'h0, 'h1FFFF);
-        cmd("r 0 00",       0, 0,  'h0);            // unchanged by the two above
+        cmd("w 0 00 FFFFFFFF",  1, 0, 'h0, 64'hFFFFFFFF);  // the widest data that fits
+        cmd("r 0 00",           0, 0, 'h0);
+        cmd("w 0 00 0FFFFFFFF", 1, 0, 'h0, 64'hFFFFFFFF);
+        cmd("w 0 00 100000000", 1, 0, 'h0, 64'h100000000);
+        cmd("w 0 00 1FFFFFFFF", 1, 0, 'h0, 64'h1FFFFFFFF);
+        cmd("r 0 00",           0, 0, 'h0);              // unchanged by the two above
         // Overflows that would wrap to a valid value if the dropped digits were ignored
         bad("r 0 100000000000003");
         bad("r 1000000000000000000 3");

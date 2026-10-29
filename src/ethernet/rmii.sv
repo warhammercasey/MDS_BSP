@@ -1,6 +1,4 @@
-module rmii #(
-    parameter WIDTH = 8
-) (
+module rmii (
     input  logic       clk,
     input  logic       rstn,
 
@@ -14,72 +12,30 @@ module rmii #(
 
     // axis_in is layer 2 ethernet frame
     // This module appends preamble, SFD, and IPG
-    axis_tlast_if.slv  axis_in
+    axis_tlast_if.slv  axis_in,
+
+    axis_tlast_if.mst  axis_out
 );
+    localparam AXIS_WIDTH = 8;
 
-    localparam PREAMBLE_BYTE = 8'b10101010;
-    localparam SFD_BYTE      = 8'b10101011;
+    assign rmii_rstn = rstn;
 
-    localparam PREAMBLE_LENGTH = 7;
-    localparam IPG_LENGTH = 12;
+    rmii_tx rmii_tx_i (
+        .clk(clk),
+        .rstn(rstn),
+        .rmii_txd(rmii_txd),
+        .rmii_txen(rmii_txen),
+        .axis_in(axis_in)
+    );
 
-
-    typedef enum {
-        IDLE,
-        PREAMBLE,
-        SFD,
-        PAYLOAD,
-        IPG
-    } state_t;
-    state_t state, next_state;
-
-    logic [$clog2(8/2)-1:0] bit_counter; // Counts bits transferred for each byte
-    logic [$clog2(PREAMBLE_LENGTH)-1:0] preamble_counter;
-    logic [$clog2(IPG_LENGTH)-1:0] ipg_counter;
-
-    logic bit_counter_done;
-    logic preamble_counter_done;
-    logic ipg_counter_done;
-
-    assign bit_counter_done = bit_counter == 8/2-1;
-    assign preamble_counter_done = preamble_counter == PREAMBLE_LENGTH - 1;
-    assign ipg_counter_done = ipg_counter == IPG_LENGTH - 1;
-
-    logic last_payload_byte;
-
-    // State machine
-    always_comb begin
-        if(~rstn) begin
-            next_state = IDLE;
-        end else begin
-            case(state)
-            IDLE: if(axis_in.tvalid) begin
-                next_state = PREAMBLE;
-            end
-
-            PREAMBLE: if(bit_counter_done && preamble_counter_done) begin
-                next_state = SFD_BYTE;
-            end
-
-            SFD_BYTE: if(bit_counter_done) begin
-                next_state = PAYLOAD;
-            end
-
-            PAYLOAD: if(bit_counter_done && last_payload_byte) begin
-                next_state = IPG;
-            end
-
-            IPG: if(bit_counter_done && ipg_counter_done) begin
-                next_state = IDLE;
-            end
-            endcase
-        end
-    end
-
-    always_ff @(posedge clk) begin
-        state <= next_state;
-    end
-
+    rmii_rx rmii_rx_i (
+        .clk(clk),
+        .rstn(rstn),
+        .rmii_crs_dv(rmii_crs_dv),
+        .rmii_rxd(rmii_rxd),
+        .rmii_rxerr(rmii_rxerr),
+        .axis_out(axis_out)
+    );
 
 
 endmodule

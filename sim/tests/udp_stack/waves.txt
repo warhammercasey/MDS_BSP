@@ -1,0 +1,49 @@
+# GTKWave signals for the udp_stack test. Paths are relative to tb_udp_stack.
+# Format: see sim/waves.py
+
+clk
+rstn
+loopback
+
+group APB
+    apb.psel*
+    apb.penable
+    apb.pwrite
+    apb.paddr           hex
+    apb.pwdata          hex
+    apb.pready
+    apb.prdata          hex
+    apb.pslverr
+end
+
+group TX
+    tx_payload.tvalid
+    tx_payload.tready
+    tx_payload.tdata    hex
+    stack.udp_packetizer_i.state
+    stack.ipv4_packetizer_i.state
+    stack.eth_packetizer_i.state
+    mac_tx.tvalid
+    mac_tx.tready
+    mac_tx.tdata        hex
+    mac_tx.tlast
+    txen
+    txd                 bin
+end
+
+group RX
+    crs_dv
+    rxd                 bin
+    mac_rx.tvalid
+    mac_rx.tdata        hex
+    mac_rx.tlast
+    stack.eth_depacketizer_i.state
+    stack.ipv4_depacketizer_i.state
+    stack.udp_depacketizer_i.state
+    rx_udp_hdr.valid
+    rx_udp_hdr.ready
+    rx_payload.tvalid
+    rx_payload.tready
+    rx_payload.tdata    hex
+    rx_payload.tlast
+end

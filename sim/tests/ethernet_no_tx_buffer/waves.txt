@@ -1,0 +1,50 @@
+# GTKWave signals for the ethernet test. Paths are relative to tb_ethernet.
+# Format: see sim/waves.py
+
+clk
+rstn
+clk_io
+
+group Samples (clk_io)
+    adc_axis.tvalid
+    adc_axis.tready
+    adc_axis.tid                dec
+    adc_axis.tdata              hex
+    mic_axis.tvalid
+    mic_axis.tready
+    mic_axis.tid                dec
+    mic_axis.tdata              hex
+end
+
+group RTP
+    dut.adc_rtp.state
+    dut.adc_rtp.sequence_number dec
+    dut.mic_rtp.state
+    dut.mic_rtp.sequence_number dec
+end
+
+group Switch
+    dut.rtp_switch.buf_valid    bin
+    dut.rtp_switch.active
+    dut.rtp_switch.sel          dec
+    dut.rtp_tx.tvalid
+    dut.rtp_tx.tready
+    dut.rtp_tx.tdata            hex
+    dut.rtp_tx.tlast
+    dut.udp_tx_length           dec
+end
+
+group Stack
+    dut.udp_stack_i.udp_packetizer_i.state
+    dut.udp_stack_i.ipv4_packetizer_i.state
+    dut.udp_stack_i.eth_packetizer_i.state
+    dut.mac_tx.tvalid
+    dut.mac_tx.tready
+    dut.mac_tx.tdata            hex
+    dut.mac_tx.tlast
+end
+
+group Wire
+    txen
+    txd                         bin
+end

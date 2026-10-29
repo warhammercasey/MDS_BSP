@@ -1,0 +1,25 @@
+# GTKWave signals for the axis_tid_reorder test. Paths are relative to tb_axis_tid_reorder.
+# Shows the 8 channel instance.
+# Format: see sim/waves.py
+
+clk
+g_ch8.rstn
+
+group Input
+    g_ch8.axis_in.tvalid
+    g_ch8.axis_in.tready
+    g_ch8.axis_in.tid       dec
+    g_ch8.axis_in.tdata     hex
+end
+
+group Reorder
+    g_ch8.dut.held          bin
+    g_ch8.dut.next_id       dec
+end
+
+group Output
+    g_ch8.axis_out.tvalid
+    g_ch8.axis_out.tready
+    g_ch8.axis_out.tid      dec
+    g_ch8.axis_out.tdata    hex
+end

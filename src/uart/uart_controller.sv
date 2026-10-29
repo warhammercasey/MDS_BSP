@@ -1,6 +1,6 @@
 // UART console: echoes what is typed and runs register commands on the APB bus.
 //
-//   r <sel> <addr>          read  -> prints the data in hex, padded to the bus width, e.g. "00DE"
+//   r <sel> <addr>          read  -> prints the data in hex, padded to the bus width, e.g. "000000DE"
 //   w <sel> <addr> <data>   write -> prints "OK"
 //
 // <sel> is the peripheral (psel line). Fields are hex, in either case, with any
@@ -20,9 +20,9 @@ module uart_controller #(
     parameter CLK_FREQ       = 50_000_000,
     parameter BAUD           = 115200,
     parameter APB_ADDR_WIDTH = 8,
-    parameter APB_DATA_WIDTH = 16,
+    parameter APB_DATA_WIDTH = 32,
     parameter APB_SEL_WIDTH  = 1,    // Number of APB peripherals (psel lines)
-    parameter APB_TIMEOUT    = 1024  // Cycles to wait for pready before giving up
+    parameter APB_TIMEOUT    = 16384  // Cycles to wait for pready before giving up
 ) (
     input  logic clk,
     input  logic rstn,

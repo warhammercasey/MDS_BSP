@@ -23,6 +23,32 @@
         <efx:design_file name="../src/led_cube.sv" version="default" library="default"/>
         <efx:design_file name="../src/reset_sync.sv" version="default" library="default"/>
         <efx:design_file name="../src/cdc/simple_dual_port_bram.sv" version="default" library="default"/>
+        <efx:design_file name="../src/interfaces/apb_if.sv" version="default" library="default"/>
+        <efx:design_file name="../src/uart/uart_controller.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/eth_smi.sv" version="default" library="default"/>
+        <efx:design_file name="../src/infrastructure/axis_switch.sv" version="default" library="default"/>
+        <efx:design_file name="../src/infrastructure/apb_splitter.sv" version="default" library="default"/>
+        <efx:design_file name="../src/infrastructure/apb_width_conv.sv" version="default" library="default"/>
+        <efx:design_file name="../src/cdc/apb_cdc.sv" version="default" library="default"/>
+        <efx:design_file name="../src/infrastructure/axis_tid_reorder.sv" version="default" library="default"/>
+        <efx:design_file name="../src/interfaces/net_hdr_if.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/rmii_tx.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/rmii_rx.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/ethernet.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/rmii.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/packetization/udp_packetizer.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/packetization/eth_depacketizer.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/packetization/net_pkg.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/packetization/ipv4_packetizer.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/packetization/udp_depacketizer.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/packetization/udp_stack.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/packetization/ipv4_depacketizer.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/packetization/eth_packetizer.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/packetization/udp_stack_regs.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ethernet/packetization/rtp_packetizer.sv" version="default" library="default"/>
+        <efx:design_file name="../src/infrastructure/axis_packet_switch.sv" version="default" library="default"/>
+        <efx:design_file name="../src/infrastructure/axis_packet_fifo.sv" version="default" library="default"/>
+        <efx:design_file name="../src/infrastructure/axis_tid_broadcast.sv" version="default" library="default"/>
         <efx:top_vhdl_arch name=""/>
         <efx:msg_config name=""/>
         <efx:partition_definitions name=""/>
@@ -108,7 +134,7 @@
     </efx:bitstream_generation>
     <efx:debugger>
         <efx:param name="work_dir" value="work_dbg" value_type="e_string"/>
-        <efx:param name="auto_instantiation" value="off" value_type="e_bool"/>
-        <efx:param name="profile" value="NONE" value_type="e_string"/>
+        <efx:param name="auto_instantiation" value="on" value_type="e_bool"/>
+        <efx:param name="profile" value="debug_profile.wizard.json" value_type="e_string"/>
     </efx:debugger>
 </efx:project>

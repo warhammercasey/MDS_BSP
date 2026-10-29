@@ -1,7 +1,7 @@
 module eth_smi #(
     parameter DATA_WIDTH = 16,
     parameter ADDR_WIDTH = 5,
-    parameter MDC_DIV = 10
+    parameter MDC_DIV = 100
 ) (
     input  logic clk,
     input  logic rstn,
@@ -21,7 +21,7 @@ module eth_smi #(
     localparam logic [1:0] OP_READ     = 2'b10;
     localparam logic [1:0] OP_WRITE    = 2'b01;
     localparam logic [1:0] TA_WRITE    = 2'b10; // Turnaround driven during a write
-    localparam logic [4:0] PHY_ADDR    = 5'h00;
+    localparam logic [4:0] PHY_ADDR    = 5'h01;
     localparam PREAMBLE_BITS = 32; // Ones sent before every frame
 
     // Clock rising edge and falling edge

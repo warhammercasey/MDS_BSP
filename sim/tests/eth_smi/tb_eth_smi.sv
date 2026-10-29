@@ -6,7 +6,7 @@
 //
 // Each APB transfer is checked against the frames the PHY saw while it ran:
 //   - registers the LAN8720A has (0-6, 17, 18, 26, 27, 29-31): one frame, to PHY
-//     address 0, with the transfer's opcode, register and write data. A read
+//     address 1 (PHY_ADDR), with the transfer's opcode, register and write data. A read
 //     returns the data the PHY sent. No PSLVERR.
 //   - any other register: PSLVERR, and no frame
 //   - pready within one frame time (32-bit preamble + 32 bits) of the access
@@ -38,6 +38,8 @@ module tb_eth_smi;
 
     localparam real PHY_RESET_NS = 101.0e3;     // nRST low >= 100 us (Table 5-9)
     localparam int  GAP          = 2;           // idle cycles after directed transfers
+
+    localparam logic [4:0] PHY_ADDR = 5'd1;     // eth_smi's PHY_ADDR; the board straps PHYAD0 high
 
     localparam int N_BURST  = 30;
     localparam int N_RANDOM = 300;
@@ -86,7 +88,9 @@ module tb_eth_smi;
         .mdio_OE(mdio_OE)
     );
 
-    lan8720a_model phy (
+    lan8720a_model #(
+        .PHYAD0(PHY_ADDR[0])
+    ) phy (
         .nrst(phy_nrst),
         .mdc(mdc),
         .mdio(mdio),
@@ -204,7 +208,7 @@ module tb_eth_smi;
             check(apb.pslverr === 1'b0, "pslverr", $sformatf("%s: unexpected PSLVERR", what));
             check(n == 1, "frame count", $sformatf("%s: the PHY received %0d SMI frames, expected 1", what, n));
             if (n > 0) begin
-                check(phy.frames[0].write == cur.wr && phy.frames[0].regad == cur.addr && phy.frames[0].phyad == 5'd0,
+                check(phy.frames[0].write == cur.wr && phy.frames[0].regad == cur.addr && phy.frames[0].phyad == PHY_ADDR,
                       "frame", $sformatf("%s: the PHY received a %s", what, frame_str(0)));
                 if (cur.wr)
                     check(phy.frames[0].data === cur.wdata, "write data",
@@ -339,7 +343,7 @@ module tb_eth_smi;
         else
             addr = not_regs[$urandom_range(not_regs.size() - 1)];
         if (addr == 18)
-            data[4:0] = 5'd0;  // PHYAD: keep the PHY at address 0, where eth_smi sends
+            data[4:0] = PHY_ADDR;  // PHYAD: keep the PHY at the address eth_smi sends to
         q_xfer(wr, addr, data, gap);
     endfunction
 
@@ -378,7 +382,7 @@ module tb_eth_smi;
         q_read(5,  16'h0001, 16'hE7FF);  // no link partner
         q_read(6,  16'h0000, 16'h001F);
         q_read(17, 16'h0002, 16'h2243);  // ENERGYON
-        q_read(18, 16'h40E0, 16'h40FF);  // MODE 111, PHYAD 0
+        q_read(18, 16'h40E0 | 16'(PHY_ADDR), 16'h40FF);  // MODE 111, PHYAD from the strap
         q_read(26, 16'h0000, 16'hFFFF);  // no symbol errors
         q_read(27, 16'h0000, 16'hA810);
         q_read(29);                      // interrupt flags: INT7 may be set at power-up

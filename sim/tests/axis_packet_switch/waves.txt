@@ -1,0 +1,33 @@
+# GTKWave signals for the axis_packet_switch test. Paths are relative to tb_axis_packet_switch.
+# Shows the N=3 instance (g_n[0..2] are N = 1, 2, 3).
+# Format: see sim/waves.py
+
+clk
+g_n[2].h.rstn
+
+group Inputs
+    g_n[2].h.dut.g_in[0].packet_buffer.axis_in.tvalid
+    g_n[2].h.dut.g_in[0].packet_buffer.axis_in.tready
+    g_n[2].h.dut.g_in[0].packet_buffer.axis_in.tlast
+    g_n[2].h.dut.g_in[1].packet_buffer.axis_in.tvalid
+    g_n[2].h.dut.g_in[1].packet_buffer.axis_in.tready
+    g_n[2].h.dut.g_in[1].packet_buffer.axis_in.tlast
+    g_n[2].h.dut.g_in[2].packet_buffer.axis_in.tvalid
+    g_n[2].h.dut.g_in[2].packet_buffer.axis_in.tready
+    g_n[2].h.dut.g_in[2].packet_buffer.axis_in.tlast
+end
+
+group Arbiter
+    g_n[2].h.dut.buf_valid      bin
+    g_n[2].h.dut.active
+    g_n[2].h.dut.sel            dec
+    g_n[2].h.dut.grant_idx      dec
+end
+
+group Output
+    g_n[2].h.axis_out.tvalid
+    g_n[2].h.axis_out.tready
+    g_n[2].h.axis_out.tdata     hex
+    g_n[2].h.axis_out.tlast
+    g_n[2].h.out_sel            dec
+end

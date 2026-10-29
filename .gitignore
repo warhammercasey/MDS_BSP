@@ -1,3 +1,7 @@
 outflow/
 work_*/
 ooc/
+.lock
+*.gtkw
+*.vcd
+debug_profile.wizard.json
