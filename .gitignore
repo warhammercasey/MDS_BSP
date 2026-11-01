@@ -5,3 +5,5 @@ ooc/
 *.gtkw
 *.vcd
 debug_profile.wizard.json
+host/recordings/
+__pycache__/

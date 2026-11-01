@@ -90,7 +90,7 @@ sim/
   common/tb_macros.svh  CHECK_EQ, CHECK, TB_INIT, TB_WATCHDOG (found via +incdir+sim/common)
   models/             datasheet-based device models with timing checks
     adc088s022_model.sv   TI ADC088S022 (SPI ADC)
-    sph0645_model.sv      Knowles SPH0645LM4H-B (I2S mic)
+    inmp441_model.sv      InvenSense INMP441 (I2S mic)
     lan8720a_model.sv     Microchip LAN8720A (Ethernet PHY: MDC/MDIO and its registers)
   tests/<name>/
     files.f           Verilator filelist: --top-module <tb>, then sources relative to the repo root

@@ -74,8 +74,8 @@ module cain_top (
     localparam ADC_BITS      = 8;
     localparam ADC_SAMPLE_RATE = 200_000; // 100 kHz sample rate
 
-    localparam I2S_CLK_FREQ  = 4_096_000; // 4.096 MHz I2S clock
-    localparam I2S_BITS      = 18; // Data format is 24-bit but only 18 bits are used
+    localparam I2S_CLK_FREQ  = 3_072_000; // 3.072 MHz max I2S clock (INMP441 max is 3.2 MHz): 3.0655 MHz, 47.9 kHz sample rate
+    localparam I2S_BITS      = 18; // Top 18 of the 24-bit words: the rest is below the INMP441's noise floor
     localparam I2S_CHANNELS  = 8;
     localparam ADC_CHANNELS  = 8;
 
@@ -84,7 +84,7 @@ module cain_top (
     // packet and Ethernet TX buffers, so it is the main control on their block RAM
     // (see ethernet.sv). A multiple of 24 fills both streams' packets exactly (frames
     // are 8 bytes for the ADC, 24 for the mics).
-    localparam RTP_PAYLOAD_BYTES = 1152; // ADC: 144 frames (5.8 ms), mics: 48 frames (0.75 ms)
+    localparam RTP_PAYLOAD_BYTES = 1152; // ADC: 144 frames (5.8 ms), mics: 48 frames (1.0 ms)
     localparam logic [31:0] ADC_RTP_SSRC = 32'h4144_4330; // "ADC0"
     localparam logic [31:0] MIC_RTP_SSRC = 32'h4D49_4330; // "MIC0"
     localparam logic [6:0]  ADC_RTP_PT   = 7'd96;         // Dynamic payload types
@@ -442,7 +442,7 @@ module cain_top (
     axis_tid_cdc_fifo #(
         .WIDTH(I2S_BITS), // Data width
         .ID_WIDTH($clog2(I2S_CHANNELS)),
-        .AWIDTH(4)
+        .AWIDTH(3)
     ) axis_tid_cdc_fifo_adc_data (
         .clka(clk_io),
         .rstna(rstn_io),

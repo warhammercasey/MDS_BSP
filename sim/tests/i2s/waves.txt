@@ -22,7 +22,7 @@ group Received audio (tid 0-7)
 end
 
 group Mic models (line 0)
-    g_mic[0].mic.active
+    g_mic[0].mic.sck_count  dec
     g_mic[0].mic.slot       dec
     g_mic[0].mic.data_oe
     g_mic[0].mic.tx_sample  sdec

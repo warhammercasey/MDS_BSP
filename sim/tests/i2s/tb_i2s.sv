@@ -1,13 +1,15 @@
 `timescale 1ns/1ps
 `include "tb_macros.svh"
 
-// I2S microphone receiver test: 8 SPH0645 mics, 2 per data line, sharing BCLK/WS.
+// I2S microphone receiver test: 8 INMP441 mics, 2 per data line, sharing SCK/WS.
 //
-// Mic m sits on data line m/2 with SELECT = m%2, so its AXIS tid should be m:
+// Mic m sits on data line m/2 with L/R = m%2, so its AXIS tid should be m:
 // tid[2:1] = data line, tid[0] = channel (WS level). Each mic model records the
-// words it transmits; every AXIS sample is checked against the next word from
-// the mic its tid points to. Also checks AXIS stability under backpressure,
-// shared-line contention, and (in the models) the datasheet's I2S timing.
+// 24-bit words it transmits; every AXIS sample is checked against the top I2S_BITS
+// of the next word from the mic its tid points to. Also checks AXIS stability under
+// backpressure, shared-line contention, and (in the models) the datasheet's I2S
+// timing. The mics' startup delay is shortened so the zero words it outputs are
+// still seen.
 module tb_i2s;
     import tb_pkg::*;
 
@@ -20,6 +22,7 @@ module tb_i2s;
     localparam int FRAMES_FIXED = 3;  // frames (one word per mic) with fixed patterns
     localparam int FRAMES_SINE  = 40; // frames of sine waves
     localparam int FRAMES_BP    = 6;  // frames with random backpressure
+    localparam int STARTUP_SCK  = 256; // mic zero-output startup (2^18 on the real part)
 
     `TB_INIT
     `TB_WATCHDOG(20_000_000) // 20 ms
@@ -53,17 +56,18 @@ module tb_i2s;
     // ------------------------------------------------------------------
     // Microphones
     // ------------------------------------------------------------------
-    logic signed [17:0] mic_in    [8];  // acoustic input per mic (ideal code)
-    logic               mic_data  [8];
-    logic               mic_oe    [8];
-    logic signed [17:0] mic_word  [8];
-    int unsigned        mic_words [8];
+    logic signed [23:0]         mic_in    [8];  // acoustic input per mic (ideal code)
+    logic                       mic_data  [8];
+    logic                       mic_oe    [8];
+    logic signed [23:0]         mic_word  [8];
+    int unsigned                mic_words [8];
 
-    logic signed [17:0] expected  [8][$]; // words sent by each mic, not yet seen on AXIS
+    logic signed [I2S_BITS-1:0] expected  [8][$]; // words sent by each mic (top bits), not yet seen on AXIS
+    int unsigned                zero_words = 0;   // startup words (all mics)
 
     for (genvar m = 0; m < 8; m++) begin : g_mic
-        sph0645_model #(.SEL(1'(m % 2))) mic (
-            .bclk(i2s_sck),
+        inmp441_model #(.LR(1'(m % 2)), .STARTUP_SCK(STARTUP_SCK)) mic (
+            .sck(i2s_sck),
             .ws(i2s_ws),
             .data(mic_data[m]),
             .data_oe(mic_oe[m]),
@@ -73,8 +77,11 @@ module tb_i2s;
         );
 
         always @(mic_words[m])
-            if (mic_words[m] != 0)
-                expected[m].push_back(mic_word[m]);
+            if (mic_words[m] != 0) begin
+                expected[m].push_back(mic_word[m][23 -: I2S_BITS]);
+                if (mic_word[m] == 0)
+                    zero_words++;
+            end
     end
 
     // Shared data lines: whichever mic drives, else the 100k pull-down
@@ -88,16 +95,17 @@ module tb_i2s;
                 tb_error($sformatf("Bus contention: both mics on data line %0d are driving", l));
     end
 
-    // Input signals. Fixed: distinct full-scale/edge codes per mic. Sine: a different tone per mic.
-    localparam logic signed [17:0] FIXED_CODES [8] = '{
-        18'sh1FFFF,  // +full scale
-        18'sh20000,  // -full scale
-        18'sh3FFFF,  // -1
-        18'sh00001,  // +1
-        18'sh2AAAA,
-        18'sh15555,
-        18'sh0F0F0,
-        18'sh30F0F
+    // Input signals. Fixed: distinct full-scale/edge codes per mic, with the bits below
+    // I2S_BITS set so dropping them is checked. Sine: a different tone per mic.
+    localparam logic signed [23:0] FIXED_CODES [8] = '{
+        24'sh7FFFFF,  // +full scale
+        24'sh800000,  // -full scale
+        24'shFFFFFF,  // -1
+        24'sh00007F,  // +1 at 18 bits, plus low bits
+        24'shAAAAAA,
+        24'sh555555,
+        24'sh00003F,  // only bits below 18: 0 at 18 bits
+        24'shF0F0F0
     };
     bit sine_inputs = 1'b0;
 
@@ -105,7 +113,7 @@ module tb_i2s;
         for (int m = 0; m < 8; m++) begin
             if (sine_inputs) begin
                 automatic real freq = 500.0 * (m + 1);
-                mic_in[m] = 18'($rtoi(0.9 * 131071.0 * $sin(2.0 * 3.14159265358979 * freq * $realtime * 1.0e-9)));
+                mic_in[m] = 24'($rtoi(0.9 * 8388607.0 * $sin(2.0 * 3.14159265358979 * freq * $realtime * 1.0e-9)));
             end else begin
                 mic_in[m] = FIXED_CODES[m];
             end
@@ -121,7 +129,7 @@ module tb_i2s;
     always @(posedge clk)
         axis_i2s.tready <= !backpressure || ($urandom_range(3) == 0);
 
-    logic signed [17:0] rx_audio [8];    // last sample received per mic (view as analog in waves)
+    logic signed [I2S_BITS-1:0] rx_audio [8]; // last sample received per mic (view as analog in waves)
     int unsigned        rx_count [8] = '{default: 0};
     int unsigned        discarded = 0;
     realtime            t_first_rx, t_last_rx;
@@ -137,7 +145,7 @@ module tb_i2s;
                 tb_error($sformatf("tid %0d (line %0d, ch %0d): sample 0x%05h but that mic has not sent a word",
                                    m, m / 2, m % 2, axis_i2s.tdata));
             end else begin
-                automatic logic signed [17:0] exp = expected[m].pop_front();
+                automatic logic signed [I2S_BITS-1:0] exp = expected[m].pop_front();
                 `CHECK_EQ(axis_i2s.tdata, exp,
                           $sformatf("tid %0d (line %0d, ch %0d) sample %0d", m, m / 2, m % 2, rx_count[m]))
                 rx_audio[m] = axis_i2s.tdata;
@@ -160,7 +168,7 @@ module tb_i2s;
 
     // AXIS rule: while tvalid && !tready, tvalid/tdata/tid must hold
     logic        stalled = 1'b0;
-    logic [17:0] stalled_data;
+    logic [I2S_BITS-1:0] stalled_data;
     logic [2:0]  stalled_id;
     int unsigned stability_errors = 0;
 
@@ -220,8 +228,9 @@ module tb_i2s;
         `CHECK(discarded <= 4, $sformatf("%0d samples output before any mic sent data (expected at most 4)", discarded))
         tb_info($sformatf("Discarded %0d start-up samples", discarded));
 
-        tb_info($sformatf("Mics sent %0d words each (mic 0 mode: %s)", mic_words[0],
-                          g_mic[0].mic.active ? "active" : "sleep"));
+        // The startup zeros came through like any other word (STARTUP_SCK covers ~2 frames)
+        `CHECK(zero_words >= 8, $sformatf("only %0d zero startup words from the mics", zero_words))
+        tb_info($sformatf("Mics sent %0d words each, %0d startup zeros in all", mic_words[0], zero_words));
         tb_finish();
     end
 

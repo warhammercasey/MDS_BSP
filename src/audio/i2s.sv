@@ -1,7 +1,10 @@
+// I2S master for 8 INMP441 microphones, 2 per data line. SCK is CLK_FREQ divided by
+// an even number, at or below I2S_CLK; WS is SCK/64. The mics change SD on SCK falling
+// edges, so it's sampled on rising edges.
 module i2s #(
     parameter CLK_FREQ = 50_000_000,
-    parameter I2S_CLK = 4_096_000, // 4.096 MHz
-    parameter I2S_BITS = 18 // data format is 24-bit but only 18 bits are used
+    parameter I2S_CLK = 3_072_000, // 3.072 MHz. The INMP441 takes 0.5-3.2 MHz
+    parameter I2S_BITS = 18 // Bits kept from the top of each 24-bit word (up to 24)
 ) (
     input  logic       clk,
     input  logic       rstn,
@@ -72,14 +75,15 @@ module i2s #(
     end
 
     
-    // Shift in data
+    // Shift in data on rising edges. The MSB is sampled on the 2nd rising edge after WS
+    // changes, when bit_counter (before it increments) is 0.
     logic [I2S_BITS-1:0] i2s_data_reg[4];
     always_ff @(posedge clk) begin
         if(~rstn) begin
             i2s_data_reg <= '{default: '0};
 
         end else begin
-            if(fe_trigger && bit_counter < I2S_BITS) begin
+            if(re_trigger && bit_counter < I2S_BITS) begin
                 for(int i = 0; i < 4; i++) begin
                     i2s_data_reg[i] <= {i2s_data_reg[i][I2S_BITS-2:0], i2s_data[i]};
                 end

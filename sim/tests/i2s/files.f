@@ -4,5 +4,5 @@
 src/interfaces/axis_if.sv
 src/audio/i2s.sv
 
-sim/models/sph0645_model.sv
+sim/models/inmp441_model.sv
 sim/tests/i2s/tb_i2s.sv
