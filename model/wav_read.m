@@ -1,0 +1,88 @@
+recording_path = 'recordings/one_direction_pacer_test/';
+recordingFiles = dir(fullfile(recording_path, '*.wav'));
+assert(~isempty(recordingFiles), 'No MAT recordings found.');
+
+recordingNames = {recordingFiles.name};
+[~, sortOrder] = sort(recordingNames);
+recordingFiles = recordingFiles(sortOrder);
+
+fs = 47.9e3;
+channels = 8;
+audio_data = audioread([recording_path, recordingFiles(1).name]);
+for i=2:channels
+    audio_data = [audio_data, audioread([recording_path, recordingFiles(i).name])];
+end
+
+%% Mix down to baseband and cutoff highest freq
+max_freq = 10e3;
+mix_tone = exp(1j*2*pi*(-max_freq/2)/fs*(0:length(audio_data)-1)).';
+basebandData = audio_data .* mix_tone;
+cutoffFrequency = max_freq/2;
+
+Hd = fdesign.lowpass("Fp,Fst,Ap,Ast", cutoffFrequency-200, cutoffFrequency+200, 1, 80, fs);
+d = design(Hd, "equiripple");
+
+filtered_data = filter(d, basebandData);
+
+%% Plot
+figure(1);
+plot_spectrum(audio_data, fs);
+title("Raw audio");
+
+figure(2);
+plot_spectrum(basebandData, fs);
+title("Basebanded");
+
+figure(3);
+plot_spectrum(filtered_data, fs);
+title("Filtered");
+
+%% Correlate each channel
+correlated = zeros(length(filtered_data)*2 - 1, channels, channels);
+for channelA = 1:channels
+    for channelB = 1:channels
+        correlated(:, channelA, channelB) = xcorr(filtered_data(:, channelA), filtered_data(:, channelB));
+    end
+end
+
+%% Plot correlations
+% figure(4);
+% for i=1:channels
+%     for j=1:channels
+%         subplot(channels, channels, j + (i-1)*channels);
+%         plot(abs(correlated(:, i, j)));
+%     end
+% end
+% title("Correlated channels");
+
+%% Estimate delay
+delays = zeros(channels, channels);
+for channelA = 1:channels
+    for channelB = 1:channels
+        [~, peakIndex] = max(abs(correlated(:, channelA, channelB)));
+        delays(channelA, channelB) = (peakIndex - length(filtered_data))/fs;
+    end
+end
+
+%% Microphone locations
+sp = 16e-3/2; % Spacing (m)
+mic_locations = sp*[-1, -1, -1, -1,  1,  1,  1,  1;
+                    -1,  1, -1,  1, -1,  1, -1,  1;
+                    -1, -1,  1,  1,  1,  1, -1, -1];
+
+%% Estimate direction with least-squares
+soundSpeed = 343; % Speed of sound (m/s)
+num_compares = channels*(channels-1)/2;
+delays_1d = zeros(num_compares, 1);
+A = zeros(num_compares, 3);
+
+idx = 1;
+for channelA = 1:channels-1
+    for channelB = (channelA+1):channels
+        delays_1d(idx) = delays(channelB, channelA);
+        A(idx, :) = (mic_locations(:, channelA) - mic_locations(:, channelB)).';
+        idx = idx + 1;
+    end
+end
+
+directionVector = (A \ (soundSpeed*delays_1d));
