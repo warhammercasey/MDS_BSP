@@ -7,3 +7,4 @@ ooc/
 debug_profile.wizard.json
 host/recordings/
 __pycache__/
+*.asv

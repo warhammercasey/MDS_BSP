@@ -65,7 +65,7 @@ for channelA = 1:channels
 end
 
 %% Microphone locations
-sp = 16e-3/2; % Spacing (m)
+sp = 160e-3/2; % Spacing (m)
 mic_locations = sp*[-1, -1, -1, -1,  1,  1,  1,  1;
                     -1,  1, -1,  1, -1,  1, -1,  1;
                     -1, -1,  1,  1,  1,  1, -1, -1];
@@ -75,14 +75,26 @@ soundSpeed = 343; % Speed of sound (m/s)
 num_compares = channels*(channels-1)/2;
 delays_1d = zeros(num_compares, 1);
 A = zeros(num_compares, 3);
+channel_ids = zeros(num_compares, 2);
 
 idx = 1;
 for channelA = 1:channels-1
     for channelB = (channelA+1):channels
         delays_1d(idx) = delays(channelB, channelA);
         A(idx, :) = (mic_locations(:, channelA) - mic_locations(:, channelB)).';
+        channel_ids(idx, :) = [channelA, channelB];
         idx = idx + 1;
     end
 end
 
 directionVector = (A \ (soundSpeed*delays_1d));
+
+%% Plot reconstruction difference
+reconstructed_delays = A*(directionVector);
+
+figure(5);
+stem([delays_1d, reconstructed_delays./soundSpeed]);
+title("TDoA - actual vs fitted");
+legend(["Actual", "Estimated"]);
+ylabel("Time (S)")
+
