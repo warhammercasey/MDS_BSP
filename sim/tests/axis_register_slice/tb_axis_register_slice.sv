@@ -33,7 +33,7 @@ module axis_register_slice_inst #(
                              : KIND == 2 ? "axis_tlast_if" : "axis_tid_tlast_if";
 
     string NAME = $sformatf("%s %0d bit, %0d stages, %s", KIND_S, WIDTH, STAGES,
-                            REGISTER_READY ? "registered ready" : "forward only");
+                            REGISTER_READY == 2 ? "2-entry FIFO" : REGISTER_READY ? "registered ready" : "forward only");
 
     logic rstn = 1'b0;
 
@@ -276,7 +276,7 @@ module tb_axis_register_slice;
     logic clk = 1'b0;
     always #2.5 clk = ~clk; // 200 MHz, clk_core
 
-    localparam int N = 9;
+    localparam int N = 12;
     logic [N-1:0] done;
 
     axis_register_slice_inst #(.KIND(0), .WIDTH(8),  .STAGES(0), .REGISTER_READY(1)) g_pass      (.clk(clk), .done(done[0]));
@@ -289,6 +289,10 @@ module tb_axis_register_slice;
     axis_register_slice_inst #(.KIND(2), .WIDTH(16), .STAGES(4), .REGISTER_READY(0)) g_tlast_fwd (.clk(clk), .done(done[6]));
     axis_register_slice_inst #(.KIND(3), .WIDTH(32), .ID_WIDTH(5), .STAGES(4), .REGISTER_READY(1)) g_both_skid (.clk(clk), .done(done[7]));
     axis_register_slice_inst #(.KIND(3), .WIDTH(32), .ID_WIDTH(5), .STAGES(2), .REGISTER_READY(0)) g_both_fwd  (.clk(clk), .done(done[8]));
+    // 2-entry FIFO stages
+    axis_register_slice_inst #(.KIND(0), .WIDTH(24), .STAGES(1), .REGISTER_READY(2)) g_fifo1     (.clk(clk), .done(done[9]));
+    axis_register_slice_inst #(.KIND(1), .WIDTH(36), .ID_WIDTH(3), .STAGES(1), .REGISTER_READY(2)) g_tid_fifo (.clk(clk), .done(done[10]));
+    axis_register_slice_inst #(.KIND(3), .WIDTH(16), .ID_WIDTH(2), .STAGES(3), .REGISTER_READY(2)) g_both_fifo (.clk(clk), .done(done[11]));
 
     initial begin
         tb_info("Testing axis_register_slice: every interface type, both stage kinds, 0 to 4 stages");

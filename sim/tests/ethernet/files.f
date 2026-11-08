@@ -13,6 +13,7 @@ src/cdc/axis_tid_cdc_fifo.sv
 src/infrastructure/axis_packet_fifo.sv
 src/infrastructure/axis_packet_switch.sv
 src/infrastructure/axis_tid_serializer.sv
+src/infrastructure/axis_register_slice.sv
 src/ethernet/rmii_tx.sv
 src/ethernet/rmii_rx.sv
 src/ethernet/rmii.sv

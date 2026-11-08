@@ -151,6 +151,7 @@ module ethernet
 
     // Directions are split into x, y, z first, so the CDC FIFO is one component wide
     axis_tid_if #(.WIDTH(DIR_BITS), .ID_WIDTH(DIR_ID_WIDTH)) dir_components ();
+    axis_tid_if #(.WIDTH(DIR_BITS), .ID_WIDTH(DIR_ID_WIDTH)) dir_components_q ();
     axis_tid_if #(.WIDTH(DIR_BITS), .ID_WIDTH(DIR_ID_WIDTH)) dir_samples ();
 
     axis_tid_serializer #(
@@ -164,6 +165,19 @@ module ethernet
         .axis_out(dir_components)
     );
 
+    // Registered ready, so the FIFO's full logic doesn't reach back into clk_dir's logic
+    axis_tid_register_slice #(
+        .WIDTH(DIR_BITS),
+        .ID_WIDTH(DIR_ID_WIDTH),
+        .STAGES(1),
+        .REGISTER_READY(2)
+    ) dir_slice (
+        .clk(clk_dir),
+        .rstn(rstn_dir),
+        .axis_in(dir_components),
+        .axis_out(dir_components_q)
+    );
+
     axis_tid_cdc_fifo #(
         .WIDTH(DIR_BITS),
         .ID_WIDTH(DIR_ID_WIDTH),
@@ -173,7 +187,7 @@ module ethernet
         .rstna(rstn_dir),
         .clkb(clk),
         .rstnb(rstn),
-        .axis_in(dir_components),
+        .axis_in(dir_components_q),
         .axis_out(dir_samples)
     );
 

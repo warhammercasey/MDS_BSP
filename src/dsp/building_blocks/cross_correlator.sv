@@ -90,39 +90,112 @@ module cross_correlator #(
     // fill: samples written past the start of the current window's last N, 0..2N. The current
     // window (the one being or next to be correlated) is complete at N, and a channel can't go
     // more than N past it without overwriting it.
-    logic [FILL_W-1:0] fill[CHANNELS];
-    logic [AW-1:0]     write_ptr[CHANNELS];
-    logic              release_window; // Done with the current window
-    logic              din_in_range;
-    logic              din_write;
+    // For timing, the input is registered first (tready is just "empty", so it doesn't depend
+    // on tid), and nothing compares fill on the way: full and has_window are registered
+    // alongside it. The buffer write is registered too (it lands a clock after the beat is
+    // taken, long before the sample is read: it's the window's newest), and fill counts the
+    // write, so it's a clock behind. Whether the held beat's channel is full is looked up a clock
+    // after it's taken, into a register. That's safe: a beat takes 3 clocks, so the next one sees
+    // the count, and the window release is registered too, so full and has_window can only be
+    // high a clock too long after it, which holds input off a clock longer, and a new window
+    // waits for ptrs_ready anyway.
+    logic                in_valid;
+    logic [CH_W-1:0]     in_tid;
+    logic [WIDTH*2-1:0]  in_data;
+    logic [FILL_W-1:0]   fill[CHANNELS];
+    logic [CHANNELS-1:0] full;        // fill == 2N: hold this channel off
+    logic [CHANNELS-1:0] has_window;  // fill >= N: the current window is complete
+    logic [CHANNELS-1:0] accept;      // The held beat goes into channel c
+    logic [AW-1:0]       write_ptr[CHANNELS];
+    logic [CHANNELS-1:0] write_en;
+    logic [WIDTH*2-1:0]  write_data;
+    logic                release_window; // Done with the current window
+    logic                release_q;
+    logic                in_in_range;
+    logic                in_checked; // in_full is for the held beat
+    logic                in_full;
 
-    assign din_in_range = din.tid < CHANNELS;
-    assign din.tready   = !din_in_range || fill[din.tid] < FILL_W'(2*N);
-    assign din_write    = din.tvalid && din.tready && din_in_range;
+    assign din.tready  = ~in_valid;
+
+    always_comb begin
+        for(int c = 0; c < CHANNELS; c++) begin
+            accept[c] = in_valid && in_in_range && in_checked && !in_full && in_tid == c;
+        end
+    end
 
     always_ff @(posedge clk) begin
         if(~rstn) begin
-            fill      <= '{default: '0};
-            write_ptr <= '{default: '0};
+            in_valid <= 1'b0;
+            in_checked <= 1'b0;
+        end else if(din.tvalid && din.tready) begin
+            in_valid   <= 1'b1;
+            in_checked <= 1'b0;
+        end else if(|accept || !in_in_range) begin
+            in_valid   <= 1'b0; // Out of range channels are dropped
+            in_checked <= 1'b0;
+        end else if(in_valid) begin
+            in_checked <= 1'b1;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if(din.tvalid && din.tready) begin
+            in_tid      <= CH_W'(din.tid);
+            in_in_range <= din.tid < CHANNELS;
+            in_data     <= din.tdata;
+        end
+        in_full <= full[in_tid];
+    end
+
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            release_q <= 1'b0;
+        end else begin
+            release_q <= release_window;
+        end
+    end
+
+    logic [FILL_W-1:0] fill_next[CHANNELS];
+    always_comb begin
+        for(int c = 0; c < CHANNELS; c++) begin
+            fill_next[c] = fill[c] + FILL_W'(write_en[c]) - (release_q ? FILL_W'(N) : FILL_W'(0));
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            fill       <= '{default: '0};
+            full       <= '0;
+            has_window <= '0;
         end else begin
             for(int c = 0; c < CHANNELS; c++) begin
-                fill[c] <= fill[c] + FILL_W'(din_write && din.tid == c) - (release_window ? FILL_W'(N) : '0);
-                if(din_write && din.tid == c) begin
+                fill[c]       <= fill_next[c];
+                full[c]       <= fill_next[c] >= FILL_W'(2*N);
+                has_window[c] <= fill_next[c] >= FILL_W'(N);
+            end
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            write_en  <= '0;
+            write_ptr <= '{default: '0};
+        end else begin
+            write_en <= accept;
+            for(int c = 0; c < CHANNELS; c++) begin
+                if(write_en[c]) begin
                     write_ptr[c] <= inc(write_ptr[c]);
                 end
             end
         end
     end
 
-    logic window_ready;
-    always_comb begin
-        window_ready = 1'b1;
-        for(int c = 0; c < CHANNELS; c++) begin
-            if(fill[c] < FILL_W'(N)) begin
-                window_ready = 1'b0;
-            end
-        end
+    always_ff @(posedge clk) begin
+        write_data <= in_data;
     end
+
+    logic window_ready;
+    assign window_ready = &has_window;
 
 
     // ------------------------------------------------------------------
@@ -134,7 +207,10 @@ module cross_correlator #(
     } state_t;
     state_t state;
 
-    logic advance; // Every pipeline stage moves on together, and holds while the output is full
+    // The sequencer moves on. The pipeline behind it runs freely, so holding the sequencer just
+    // sends bubbles; it holds a group's last sample until the output hold is free for its sums.
+    logic issue;
+    logic hold_busy; // The output hold is still sending, or a group's sums are on the way
 
     logic [AW-1:0]            start_ptr;  // Window start in the ring buffers
     logic [SKIP_W-1:0]        skip;
@@ -145,23 +221,88 @@ module cross_correlator #(
     logic [CH_W-1:0]          chan_a, chan_b;
     logic [AW-1:0]            a_ptr, b_ptr;
 
+    // t, pass and pair are at their last values: registered, kept in step with them, so the
+    // end of a run doesn't need wide compares
+    logic t_last, pass_last, pair_last;
+    logic skip_left;
     logic run_last;
-    assign run_last = state == RUN && t == T_W'(T_LAST) && pass == PASS_W'(PASSES-1) && pair == PAIR_W'(PAIRS-1);
-    assign release_window = (state == IDLE && window_ready && skip != '0) || (run_last && advance);
+    logic ptrs_ready;
+    assign run_last = state == RUN && t_last && pass_last && pair_last;
+    // idle_go: in IDLE with a window ready, worked out a clock ahead into a register, since it
+    // starts the whole sequencer. Nothing it depends on can change in between without a release,
+    // which lowers ptrs_ready, so it's only acted on with ptrs_ready (still) high.
+    logic idle_go, idle_act;
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            idle_go <= 1'b0;
+        end else begin
+            idle_go <= state == IDLE && window_ready && ptrs_ready;
+        end
+    end
+    assign idle_act = state == IDLE && idle_go && ptrs_ready;
 
+    assign release_window = (idle_act && skip_left) || (run_last && issue);
+
+    // The stream start pointers, worked out ahead in registers so the sequencer only selects
+    // them: the sum one clock, the wrap the next. They follow start_ptr 2 clocks late, so a run
+    // waits for ptrs_ready after it moves. b_next_pass follows m0, which only changes at the
+    // end of a pass, T_LAST clocks before the next one ends.
+    ptr_sum_t      a_sum, b_sum, b_next_sum;
+    logic [AW-1:0] a_first, b_first, b_next_pass;
+    always_ff @(posedge clk) begin
+        a_sum       <= ptr(start_ptr) - ptr_sum_t'(MACS-1);
+        b_sum       <= ptr(start_ptr) - ptr_sum_t'(MAX_LAG);
+        b_next_sum  <= ptr(start_ptr) + ptr_sum_t'(m0) + ptr_sum_t'(MACS);
+        a_first     <= wrap(a_sum);
+        b_first     <= wrap(b_sum);
+        b_next_pass <= wrap(b_next_sum);
+    end
+
+    logic ptrs_settling;
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            ptrs_settling <= 1'b1;
+            ptrs_ready    <= 1'b0;
+        end else begin
+            ptrs_settling <= release_window;
+            ptrs_ready    <= !release_window && !ptrs_settling;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            t_last    <= T_LAST == 0;
+            pass_last <= PASSES == 1;
+            pair_last <= PAIRS == 1;
+        end else if(state == IDLE) begin
+            t_last    <= T_LAST == 0;
+            pass_last <= PASSES == 1;
+            pair_last <= PAIRS == 1;
+        end else if(issue) begin
+            if(t_last) begin
+                t_last <= T_LAST == 0;
+                if(pass_last) begin
+                    pass_last <= PASSES == 1;
+                    pair_last <= pair == PAIR_W'(PAIRS-2);
+                end else begin
+                    pass_last <= pass == PASS_W'(PASSES-2);
+                end
+            end else begin
+                t_last <= t == T_W'(T_LAST-1);
+            end
+        end
+    end
+
+    assign issue     = state == RUN && !(t_last && hold_busy);
+
+    // Only the state, the window position and the skip count are reset: the rest is set up when
+    // a run starts, so its logic doesn't carry the reset
     always_ff @(posedge clk) begin
         if(~rstn) begin
             state     <= IDLE;
             start_ptr <= AW'(START);
             skip      <= SKIP_W'(SKIP);
-            t         <= '0;
-            pass      <= '0;
-            m0        <= M0_W'(-MAX_LAG);
-            pair      <= '0;
-            chan_a    <= '0;
-            chan_b    <= CH_W'(1);
-            a_ptr     <= '0;
-            b_ptr     <= '0;
+            skip_left <= SKIP != 0;
         end else begin
             if(release_window) begin
                 start_ptr <= wrap(ptr(start_ptr) + ptr_sum_t'(N));
@@ -169,56 +310,69 @@ module cross_correlator #(
 
             case(state)
                 IDLE: begin
-                    if(window_ready) begin
-                        if(skip != '0) begin
-                            skip <= skip - 1'b1;
+                    if(idle_act) begin
+                        if(skip_left) begin
+                            skip      <= skip - 1'b1;
+                            skip_left <= skip != SKIP_W'(1);
                         end else begin
-                            state  <= RUN;
-                            t      <= '0;
-                            pass   <= '0;
-                            m0     <= M0_W'(-MAX_LAG);
-                            pair   <= '0;
-                            chan_a <= '0;
-                            chan_b <= CH_W'(1);
-                            // x_b streams from the group's first lag, x_a from MACS-1 samples
-                            // before the window so it lines up with the end of the delay line
-                            b_ptr  <= wrap(ptr(start_ptr) - ptr_sum_t'(MAX_LAG));
-                            a_ptr  <= wrap(ptr(start_ptr) - ptr_sum_t'(MACS-1));
+                            state <= RUN;
                         end
                     end
                 end
 
-                RUN: if(advance) begin
-                    if(t == T_W'(T_LAST)) begin
-                        t     <= '0;
-                        a_ptr <= wrap(ptr(start_ptr) - ptr_sum_t'(MACS-1));
-                        if(pass == PASS_W'(PASSES-1)) begin
-                            pass  <= '0;
-                            m0    <= M0_W'(-MAX_LAG);
-                            b_ptr <= wrap(ptr(start_ptr) - ptr_sum_t'(MAX_LAG));
-                            pair  <= pair + 1'b1;
-                            if(chan_b == CH_W'(CHANNELS-1)) begin
-                                chan_a <= chan_a + 1'b1;
-                                chan_b <= chan_a + CH_W'(2);
-                            end else begin
-                                chan_b <= chan_b + 1'b1;
-                            end
-                            if(run_last) begin
-                                state <= IDLE;
-                            end
-                        end else begin
-                            pass  <= pass + 1'b1;
-                            m0    <= m0 + M0_W'(MACS);
-                            b_ptr <= wrap(ptr(start_ptr) + ptr_sum_t'(m0) + ptr_sum_t'(MACS));
-                        end
-                    end else begin
-                        t     <= t + 1'b1;
-                        a_ptr <= inc(a_ptr);
-                        b_ptr <= inc(b_ptr);
+                RUN: begin
+                    if(issue && run_last) begin
+                        state <= IDLE;
                     end
                 end
             endcase
         end
+    end
+
+    always_ff @(posedge clk) begin
+        case(state)
+            IDLE: begin
+                if(idle_act && !skip_left) begin
+                    t      <= '0;
+                    pass   <= '0;
+                    m0     <= M0_W'(-MAX_LAG);
+                    pair   <= '0;
+                    chan_a <= '0;
+                    chan_b <= CH_W'(1);
+                    // x_b streams from the group's first lag, x_a from MACS-1 samples
+                    // before the window so it lines up with the end of the delay line
+                    b_ptr  <= b_first;
+                    a_ptr  <= a_first;
+                end
+            end
+
+            RUN: if(issue) begin
+                if(t_last) begin
+                    t     <= '0;
+                    a_ptr <= a_first;
+                    if(pass_last) begin
+                        pass  <= '0;
+                        m0    <= M0_W'(-MAX_LAG);
+                        b_ptr <= b_first;
+                        pair  <= pair + 1'b1;
+                        if(chan_b == CH_W'(CHANNELS-1)) begin
+                            chan_a <= chan_a + 1'b1;
+                            chan_b <= chan_a + CH_W'(2);
+                        end else begin
+                            chan_b <= chan_b + 1'b1;
+                        end
+                    end else begin
+                        pass  <= pass + 1'b1;
+                        m0    <= m0 + M0_W'(MACS);
+                        b_ptr <= b_next_pass;
+                    end
+                end else begin
+                    t     <= t + 1'b1;
+                    a_ptr <= inc(a_ptr);
+                    b_ptr <= inc(b_ptr);
+                end
+            end
+        endcase
     end
 
     // What each stream position means, carried down the pipeline with the samples
@@ -238,11 +392,11 @@ module cross_correlator #(
     logic signed [KB_W-1:0] kb; // x_b's index in the window
     assign kb = $signed({2'b0, t}) + KB_W'(m0);
     always_comb begin
-        ctrl0.valid  = state == RUN;
+        ctrl0.valid  = issue;
         ctrl0.a_ok   = t >= T_W'(MACS-1);
         ctrl0.b_ok   = kb >= 0 && kb < KB_W'(L);
         ctrl0.first  = t == T_W'(MACS-1);
-        ctrl0.last   = t == T_W'(T_LAST);
+        ctrl0.last   = t_last;
         ctrl0.chan_a = chan_a;
         ctrl0.chan_b = chan_b;
         ctrl0.pair   = pair;
@@ -253,7 +407,25 @@ module cross_correlator #(
     // ------------------------------------------------------------------
     // Ring buffers
     // ------------------------------------------------------------------
+    // Each buffer's read address, registered (x_b's pointer for chan_b, x_a's for the rest), so
+    // the address select isn't on the way into the RAMs
     logic [WIDTH*2-1:0] buffer_out[CHANNELS];
+    logic [AW-1:0]      read_addr[CHANNELS];
+    ctrl_t              ctrl0q;
+    always_ff @(posedge clk) begin
+        for(int c = 0; c < CHANNELS; c++) begin
+            read_addr[c] <= chan_b == c ? b_ptr : a_ptr;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            ctrl0q <= '0;
+        end else begin
+            ctrl0q <= ctrl0;
+        end
+    end
+
     generate
         for(genvar c = 0; c < CHANNELS; c++) begin : g_buffer
             simple_dual_port_bram #(
@@ -262,14 +434,14 @@ module cross_correlator #(
                 .DEPTH(DEPTH)
             ) ring (
                 .clka(clk),
-                .wea(din_write && din.tid == c),
+                .wea(write_en[c]),
                 .ena(1'b1),
                 .addra(write_ptr[c]),
-                .dina(din.tdata),
+                .dina(write_data),
 
                 .clkb(clk),
-                .enb(advance),
-                .addrb(chan_b == c ? b_ptr : a_ptr),
+                .enb(1'b1),
+                .addrb(read_addr[c]),
                 .doutb(buffer_out[c])
             );
         end
@@ -279,22 +451,24 @@ module cross_correlator #(
     // ------------------------------------------------------------------
     // Pipeline
     // ------------------------------------------------------------------
-    // Register every buffer's output for timing, before the channel select
-    logic [WIDTH*2-1:0] buffer_q[CHANNELS];
+    // The pipeline runs every clock, with ctrl*.valid marking the real samples. Only the delay
+    // line and the accumulators hold state, and they only move on valid samples, so bubbles
+    // from the sequencer holding pass straight through.
     always_ff @(posedge clk) begin
         if(~rstn) begin
             ctrl1 <= '0;
             ctrl2 <= '0;
-        end else if(advance) begin
-            ctrl1 <= ctrl0;
+        end else begin
+            ctrl1 <= ctrl0q;
             ctrl2 <= ctrl1;
         end
     end
 
+    // Register every buffer's output for timing, before the channel select. No enable and no
+    // reset, so synthesis packs these into the RAM blocks' output registers.
+    logic [WIDTH*2-1:0] buffer_q[CHANNELS];
     always_ff @(posedge clk) begin
-        if(advance) begin
-            buffer_q <= buffer_out;
-        end
+        buffer_q <= buffer_out;
     end
 
     // Pick out the pair's samples
@@ -302,11 +476,14 @@ module cross_correlator #(
     always_ff @(posedge clk) begin
         if(~rstn) begin
             ctrl3 <= '0;
-        end else if(advance) begin
+        end else begin
             ctrl3 <= ctrl2;
-            {xa3_re, xa3_im} <= buffer_q[ctrl2.chan_a];
-            {xb3_re, xb3_im} <= ctrl2.b_ok ? buffer_q[ctrl2.chan_b] : '0;
         end
+    end
+
+    always_ff @(posedge clk) begin
+        {xa3_re, xa3_im} <= buffer_q[ctrl2.chan_a];
+        {xb3_re, xb3_im} <= ctrl2.b_ok ? buffer_q[ctrl2.chan_b] : '0;
     end
 
     // Delay line: lane j works on lag m0+j, which needs x_b MACS-1-j samples back
@@ -315,10 +492,15 @@ module cross_correlator #(
     always_ff @(posedge clk) begin
         if(~rstn) begin
             ctrl4 <= '0;
-        end else if(advance) begin
-            ctrl4      <= ctrl3;
-            xa4_re     <= xa3_re;
-            xa4_im     <= xa3_im;
+        end else begin
+            ctrl4 <= ctrl3;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        xa4_re <= xa3_re;
+        xa4_im <= xa3_im;
+        if(ctrl3.valid) begin
             line_re[0] <= xb3_re;
             line_im[0] <= xb3_im;
             for(int d = 1; d < MACS; d++) begin
@@ -333,14 +515,17 @@ module cross_correlator #(
     always_ff @(posedge clk) begin
         if(~rstn) begin
             ctrl5 <= '0;
-        end else if(advance) begin
+        end else begin
             ctrl5 <= ctrl4;
-            for(int j = 0; j < MACS; j++) begin
-                p_rr[j] <= line_re[MACS-1-j] * xa4_re;
-                p_ii[j] <= line_im[MACS-1-j] * xa4_im;
-                p_ir[j] <= line_im[MACS-1-j] * xa4_re;
-                p_ri[j] <= line_re[MACS-1-j] * xa4_im;
-            end
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        for(int j = 0; j < MACS; j++) begin
+            p_rr[j] <= line_re[MACS-1-j] * xa4_re;
+            p_ii[j] <= line_im[MACS-1-j] * xa4_im;
+            p_ir[j] <= line_im[MACS-1-j] * xa4_re;
+            p_ri[j] <= line_re[MACS-1-j] * xa4_im;
         end
     end
 
@@ -349,12 +534,15 @@ module cross_correlator #(
     always_ff @(posedge clk) begin
         if(~rstn) begin
             ctrl6 <= '0;
-        end else if(advance) begin
+        end else begin
             ctrl6 <= ctrl5;
-            for(int j = 0; j < MACS; j++) begin
-                term_re[j] <= p_rr[j] + p_ii[j];
-                term_im[j] <= p_ir[j] - p_ri[j];
-            end
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        for(int j = 0; j < MACS; j++) begin
+            term_re[j] <= p_rr[j] + p_ii[j];
+            term_im[j] <= p_ir[j] - p_ri[j];
         end
     end
 
@@ -364,13 +552,16 @@ module cross_correlator #(
     always_ff @(posedge clk) begin
         if(~rstn) begin
             ctrl7 <= '0;
-        end else if(advance) begin
+        end else begin
             ctrl7 <= ctrl6;
-            if(ctrl6.valid && ctrl6.a_ok) begin
-                for(int j = 0; j < MACS; j++) begin
-                    acc_re[j] <= (ctrl6.first ? ACC_ZERO : acc_re[j]) + term_re[j];
-                    acc_im[j] <= (ctrl6.first ? ACC_ZERO : acc_im[j]) + term_im[j];
-                end
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if(ctrl6.valid && ctrl6.a_ok) begin
+            for(int j = 0; j < MACS; j++) begin
+                acc_re[j] <= (ctrl6.first ? ACC_ZERO : acc_re[j]) + term_re[j];
+                acc_im[j] <= (ctrl6.first ? ACC_ZERO : acc_im[j]) + term_im[j];
             end
         end
     end
@@ -399,9 +590,32 @@ module cross_correlator #(
     logic [PAIR_W-1:0]           out_pair;
     logic                        out_last_group;
 
-    logic dump;
-    assign dump    = ctrl7.valid && ctrl7.last;
-    assign advance = !(dump && out_count != '0); // The last group is still going out
+    // A group's sums are done: they go into hold, which the sequencer made sure is free by
+    // holding the group's last sample until it was (pending covers the sums on their way)
+    logic dump, pending;
+    assign dump = ctrl7.valid && ctrl7.last;
+
+    // hold_busy == pending || out_count != 0, worked out a clock ahead into a register, since
+    // it holds the sequencer
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            pending   <= 1'b0;
+            hold_busy <= 1'b0;
+        end else begin
+            if(dump) begin
+                pending <= 1'b0;
+            end else if(issue && t_last) begin
+                pending <= 1'b1;
+            end
+
+            if(dump) begin
+                hold_busy <= 1'b1; // A group goes into hold
+            end else begin
+                hold_busy <= pending || (issue && t_last) ||
+                             (dout.tvalid && dout.tready ? out_count != CNT_W'(1) : out_count != '0);
+            end
+        end
+    end
 
     assign dout.tvalid = out_count != '0;
     assign dout.tdata  = {hold_re[out_index], hold_im[out_index]};
@@ -415,7 +629,7 @@ module cross_correlator #(
             out_pair       <= '0;
             out_last_group <= 1'b0;
         end else begin
-            if(dump && advance) begin
+            if(dump) begin
                 for(int j = 0; j < MACS; j++) begin
                     hold_re[j] <= scale(acc_re[j]);
                     hold_im[j] <= scale(acc_im[j]);

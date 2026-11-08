@@ -8,7 +8,7 @@
 // model/time_correlation_model.m, with M = (c / fs) * pinv(A) worked out from the microphone
 // locations by gen_direction_matrix.py into COEF_FILE (18-bit, COEF_FRAC fraction bits). Each
 // pair's lag is multiplied into the 3 sums as it arrives, on one 18-bit multiplier, so a pair
-// takes 8 clocks. A window's sums are output and cleared on the last pair (tid PAIRS-1).
+// takes 9 clocks. A window's sums are output and cleared on the last pair (tid PAIRS-1).
 module direction_estimator #(
     parameter CHANNELS  = 8,
     parameter MAX_LAG   = 10,
@@ -36,6 +36,7 @@ module direction_estimator #(
     typedef enum logic [1:0] {
         IDLE,
         RUN,
+        ROUND_SUMS,
         FINISH
     } state_t;
     state_t state;
@@ -80,40 +81,76 @@ module direction_estimator #(
             coef_k        <= step[1:0];
             coef_q_valid  <= coef_valid;
             coef_q_k      <= coef_k;
-            coef_q        <= coef;
             product_valid <= coef_q_valid;
             product_k     <= coef_q_k;
             product       <= coef_q * lag;
         end
     end
 
-    localparam logic signed [ACC_W-1:0] ROUND   = ACC_W'(1) <<< (SHIFT-1);
-    localparam logic signed [ACC_W-1:0] OUT_MAX = (ACC_W'(1) <<< (OUT_WIDTH-1)) - 1;
-    localparam logic signed [ACC_W-1:0] OUT_MIN = -(ACC_W'(1) <<< (OUT_WIDTH-1));
-    function automatic logic signed [OUT_WIDTH-1:0] scale(logic signed [ACC_W-1:0] sum);
-        logic signed [ACC_W-1:0] rounded = (sum + ROUND) >>> SHIFT;
-        if(rounded > OUT_MAX) begin
-            return OUT_MAX[OUT_WIDTH-1:0];
-        end else if(rounded < OUT_MIN) begin
-            return OUT_MIN[OUT_WIDTH-1:0];
+    // No enable and no reset, so synthesis packs this into the ROM's output register
+    always_ff @(posedge clk) begin
+        coef_q <= coef;
+    end
+
+    // Round, then saturate a clock later. The rounded sum fits OUT_WIDTH bits if its bits from
+    // the sign down to bit OUT_WIDTH-1 are all the same, which is cheaper than comparing it.
+    localparam logic signed [ACC_W-1:0] ROUND = ACC_W'(1) <<< (SHIFT-1);
+    localparam logic signed [OUT_WIDTH-1:0] OUT_MAX = {1'b0, {(OUT_WIDTH-1){1'b1}}};
+    localparam logic signed [OUT_WIDTH-1:0] OUT_MIN = {1'b1, {(OUT_WIDTH-1){1'b0}}};
+    function automatic logic signed [OUT_WIDTH-1:0] saturate(logic signed [ACC_W-1:0] rounded);
+        logic [ACC_W-OUT_WIDTH:0] top = rounded[ACC_W-1:OUT_WIDTH-1];
+        if(&top || ~|top) begin
+            return rounded[OUT_WIDTH-1:0];
         end
-        return rounded[OUT_WIDTH-1:0];
+        return rounded[ACC_W-1] ? OUT_MIN : OUT_MAX;
     endfunction
+
+    logic signed [ACC_W-1:0] rounded[3];
+
+    // Each row's sum has its own adder, with no enable or reset: the row select (decoded a
+    // stage early) gates what's added, and a registered clear zeroes them after the last pair
+    // and in reset. The next pair's products come well after the clear.
+    localparam logic signed [COEF_W+LAG_W-1:0] PRODUCT_ZERO = '0; // Signed, so the sums stay signed
+    localparam logic signed [ACC_W-1:0]        ACC_ZERO     = '0;
+    logic [2:0] product_sel;
+    logic       acc_clear;
+    always_ff @(posedge clk) begin
+        for(int k = 0; k < 3; k++) begin
+            product_sel[k] <= coef_q_valid && coef_q_k == k;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            acc_clear <= 1'b1;
+        end else begin
+            acc_clear <= state == ROUND_SUMS && last_pair;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        for(int k = 0; k < 3; k++) begin
+            acc[k] <= (acc_clear ? ACC_ZERO : acc[k]) + (product_sel[k] ? product : PRODUCT_ZERO);
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if(state == ROUND_SUMS) begin
+            for(int k = 0; k < 3; k++) begin
+                rounded[k] <= (acc[k] + ROUND) >>> SHIFT;
+            end
+        end
+    end
 
     always_ff @(posedge clk) begin
         if(~rstn) begin
             state       <= IDLE;
             step        <= '0;
-            acc         <= '{default: '0};
             dout.tvalid <= 1'b0;
             dout.tdata  <= '0;
         end else begin
             if(dout.tvalid && dout.tready) begin
                 dout.tvalid <= 1'b0;
-            end
-
-            if(product_valid) begin
-                acc[product_k] <= acc[product_k] + product;
             end
 
             case(state)
@@ -131,15 +168,18 @@ module direction_estimator #(
                     // The last product is added on the clock that leaves this state
                     step <= step + 1'b1;
                     if(step == 3'd5) begin
-                        state <= FINISH;
+                        state <= ROUND_SUMS;
                     end
+                end
+
+                ROUND_SUMS: begin
+                    state <= FINISH;
                 end
 
                 FINISH: begin
                     if(last_pair) begin
                         dout.tvalid <= 1'b1;
-                        dout.tdata  <= {scale(acc[0]), scale(acc[1]), scale(acc[2])};
-                        acc         <= '{default: '0};
+                        dout.tdata  <= {saturate(rounded[0]), saturate(rounded[1]), saturate(rounded[2])};
                     end
                     state <= IDLE;
                 end

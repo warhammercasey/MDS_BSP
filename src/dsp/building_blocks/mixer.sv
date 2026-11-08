@@ -3,7 +3,7 @@
 //   I = round(x*cos / 2^17), Q = round(-x*sin / 2^17), dout.tdata = {I, Q}, tid passed through
 // Each TID has its own phase, counting that channel's samples from 0 after reset, so channels
 // sampled together are mixed with the same LO phase whatever order they arrive in.
-// Two multipliers shared by all channels, one sample per clock, full backpressure. Latency 5.
+// Two multipliers shared by all channels, one sample per clock, full backpressure. Latency 7.
 //
 // The LO comes from a quarter-wave {cos, sin} table in INIT_FILE (see gen_mixer_lut.py), so
 // it has 2^(LUT_AWIDTH+2) points per cycle. The phase is truncated to that, which delays the
@@ -39,14 +39,16 @@ module mixer #(
     assign advance = !dout.tvalid || dout.tready;
     assign din.tready = advance;
 
-    // Per channel phase
+    // Per channel phase, each with its own adder so tid only picks which one moves on
     logic [PHASE_WIDTH-1:0] phase[CHANNELS];
     always_ff @(posedge clk) begin
         if(~rstn) begin
             phase <= '{default: '0};
         end else begin
-            if(din.tvalid && din.tready) begin
-                phase[din.tid] <= phase[din.tid] + PHASE_INC;
+            for(int c = 0; c < CHANNELS; c++) begin
+                if(din.tvalid && din.tready && din.tid == c) begin
+                    phase[c] <= phase[c] + PHASE_INC;
+                end
             end
         end
     end
@@ -126,6 +128,24 @@ module mixer #(
         end
     end
 
+    // Register again, so the multipliers' input registers (packed into them) are fed straight
+    // from flip flops, not from the negation
+    logic                       s2q_valid;
+    logic [TID_WIDTH-1:0]       s2q_tid;
+    logic signed [WIDTH-1:0]    s2q_x;
+    logic signed [LO_WIDTH-1:0] lo_i_q, lo_q_q;
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            s2q_valid <= 1'b0;
+        end else if(advance) begin
+            s2q_valid <= s2_valid;
+            s2q_tid   <= s2_tid;
+            s2q_x     <= s2_x;
+            lo_i_q    <= lo_i;
+            lo_q_q    <= lo_q;
+        end
+    end
+
     // Multiply
     logic                             s3_valid;
     logic [TID_WIDTH-1:0]             s3_tid;
@@ -134,18 +154,34 @@ module mixer #(
         if(~rstn) begin
             s3_valid <= 1'b0;
         end else if(advance) begin
-            s3_valid  <= s2_valid;
-            s3_tid    <= s2_tid;
-            product_i <= s2_x * lo_i;
-            product_q <= s2_x * lo_q;
+            s3_valid  <= s2q_valid;
+            s3_tid    <= s2q_tid;
+            product_i <= s2q_x * lo_i_q;
+            product_q <= s2q_x * lo_q_q;
+        end
+    end
+
+    // Register the products in the fabric (the ones above are packed into the multipliers), so
+    // the rounding adders start from flip flops next to them
+    logic                             s3q_valid;
+    logic [TID_WIDTH-1:0]             s3q_tid;
+    logic signed [WIDTH+LO_WIDTH-1:0] product_i_q, product_q_q;
+    always_ff @(posedge clk) begin
+        if(~rstn) begin
+            s3q_valid <= 1'b0;
+        end else if(advance) begin
+            s3q_valid   <= s3_valid;
+            s3q_tid     <= s3_tid;
+            product_i_q <= product_i;
+            product_q_q <= product_q;
         end
     end
 
     // Round back to WIDTH bits. |lo| < 2^17, so this can't overflow
     localparam logic signed [WIDTH+LO_WIDTH-1:0] ROUND = 1 <<< (LO_WIDTH-2);
     logic signed [WIDTH+LO_WIDTH-1:0] rounded_i, rounded_q;
-    assign rounded_i = (product_i + ROUND) >>> (LO_WIDTH-1);
-    assign rounded_q = (product_q + ROUND) >>> (LO_WIDTH-1);
+    assign rounded_i = (product_i_q + ROUND) >>> (LO_WIDTH-1);
+    assign rounded_q = (product_q_q + ROUND) >>> (LO_WIDTH-1);
 
     always_ff @(posedge clk) begin
         if(~rstn) begin
@@ -153,8 +189,8 @@ module mixer #(
             dout.tdata  <= '0;
             dout.tid    <= '0;
         end else if(advance) begin
-            dout.tvalid <= s3_valid;
-            dout.tid    <= s3_tid;
+            dout.tvalid <= s3q_valid;
+            dout.tid    <= s3q_tid;
             dout.tdata  <= {rounded_i[WIDTH-1:0], rounded_q[WIDTH-1:0]};
         end
     end

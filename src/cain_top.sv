@@ -60,7 +60,7 @@ module cain_top (
     // Global parameters
     // ##################################################################
 
-    localparam CLK_CORE_FREQ = 200_000_000; // 200 MHz
+    localparam CLK_CORE_FREQ = 125_000_000; // 125 MHz
     localparam CLK_SRAM_FREQ = 100_000_000; // 100 MHz
     localparam CLK_50_FREQ   =  50_000_000; // 50 MHz
     localparam CLK_IO_FREQ   =  73_571_400; // 73.5714 MHz
@@ -120,13 +120,13 @@ module cain_top (
     localparam DSP_MIXER_INIT_FILE = "../src/dsp/building_blocks/mixer_lut.hex";
     localparam DSP_MIXER_INIT_HEX = 1;
 
-    localparam DSP_DECIM_TAPS = 128;
+    localparam DSP_DECIM_TAPS = 512;
     localparam DSP_DECIMATION = 4;
     localparam DSP_DECIM_INIT_FILE = "../src/dsp/building_blocks/decimator_coef.hex";
     localparam DSP_DECIM_INIT_HEX = 1;
     
     localparam DSP_XCORR_WINDOW_LEN = 1024;
-    localparam DSP_XCORR_WINDOW_STEP = 32;
+    localparam DSP_XCORR_WINDOW_STEP = 16;
     localparam DSP_XCORR_MAX_LAG = 10;
     // Calculates the number of MACs we need to do per clock to achieve the input sample rate
     localparam DSP_XCORR_MACS = int'($ceil(real'(DSP_XCORR_WINDOW_LEN) * (real'(DSP_XCORR_MAX_LAG)*2 + 1) * real'(I2S_CHANNELS*(I2S_CHANNELS-1)/2) * real'(DSP_INPUT_FS) / real'(DSP_DECIMATION) / real'(CLK_CORE_FREQ) / real'(DSP_XCORR_WINDOW_STEP)));

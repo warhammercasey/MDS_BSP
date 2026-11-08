@@ -4,6 +4,10 @@
 // REGISTER_READY = 1: each stage is a skid buffer (a main register plus a spare). tdata,
 //                     tvalid and tready are all registered, so no path goes through a stage,
 //                     at the cost of twice the flip flops.
+// REGISTER_READY = 2: each stage is a 2-entry FIFO. tvalid and tready are registered, and the
+//                     downstream tready only drives the read pointer and two flags, not every
+//                     data flip flop's enable as in a skid buffer. tdata comes out of a 2:1 mux.
+//                     For when the downstream tready is late.
 // REGISTER_READY = 0: each stage registers tdata and tvalid only. tready passes back through
 //                     an OR per stage, which is fine for a few stages.
 // STAGES = 0 connects straight through.
@@ -46,7 +50,46 @@ module axis_register_slice_core #(
     assign ready[STAGES]  = out_ready;
 
     for(genvar k = 0; k < STAGES; k++) begin : g_stage
-        if(REGISTER_READY) begin : g_skid
+        if(REGISTER_READY == 2) begin : g_fifo
+            // Two entries written in turn on the input handshake and read in turn: out_ready
+            // only drives the read pointer and the count flags
+            logic [WIDTH-1:0] entry[2];
+            logic             wr_sel, rd_sel;
+            logic             full, nonempty;
+            logic             push, pop;
+
+            assign push       = valid[k] && ~full;
+            assign pop        = nonempty && ready[k+1];
+            assign ready[k]   = ~full;
+            assign valid[k+1] = nonempty;
+            assign data[k+1]  = entry[rd_sel];
+
+            always_ff @(posedge clk) begin
+                if(~rstn) begin
+                    wr_sel   <= 1'b0;
+                    rd_sel   <= 1'b0;
+                    full     <= 1'b0;
+                    nonempty <= 1'b0;
+                end else begin
+                    if(push) wr_sel <= ~wr_sel;
+                    if(pop)  rd_sel <= ~rd_sel;
+                    if(push && !pop) begin
+                        full     <= nonempty; // Had one, now two
+                        nonempty <= 1'b1;
+                    end else if(pop && !push) begin
+                        full     <= 1'b0;
+                        nonempty <= full;     // Had two, now one
+                    end
+                end
+            end
+
+            always_ff @(posedge clk) begin
+                if(push) begin
+                    entry[wr_sel] <= data[k];
+                end
+            end
+
+        end else if(REGISTER_READY) begin : g_skid
             // Main register drives the output; the spare catches the beat accepted in the
             // clock the output stalled, since tready is a clock late
             logic [WIDTH-1:0] main_data, spare_data;

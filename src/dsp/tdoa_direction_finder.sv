@@ -42,6 +42,18 @@ module tdoa_direction_finder #(
     axis_if.mst dout
 );
 
+    // A local copy of the reset for each block, so the reset doesn't fan out across the chip
+    // in one net (a clock later than rstn)
+    (* syn_preserve = "true" *) logic rstn_mixer, rstn_decim, rstn_xcorr, rstn_peak, rstn_df, rstn_mavg;
+    always_ff @(posedge clk) begin
+        rstn_mixer <= rstn;
+        rstn_decim <= rstn;
+        rstn_xcorr <= rstn;
+        rstn_peak  <= rstn;
+        rstn_df    <= rstn;
+        rstn_mavg  <= rstn;
+    end
+
     // Complex from here to the correlator: {I, Q}, WIDTH each
     axis_tid_if #(
         .WIDTH(2*WIDTH),
@@ -59,7 +71,7 @@ module tdoa_direction_finder #(
         .INIT_HEX(MIXER_INIT_HEX)
     ) mixer_i (
         .clk(clk),
-        .rstn(rstn),
+        .rstn(rstn_mixer),
         .din(din),
         .dout(mixer_out_if)
     );
@@ -79,7 +91,7 @@ module tdoa_direction_finder #(
         .INIT_HEX(DECIM_INIT_HEX)
     ) decimator_i (
         .clk(clk),
-        .rstn(rstn),
+        .rstn(rstn_decim),
         .din(mixer_out_if),
         .dout(decim_out_if)
     );
@@ -100,7 +112,7 @@ module tdoa_direction_finder #(
         .OUT_WIDTH(XCORR_OUT_WIDTH)
     ) cross_correlator_i (
         .clk(clk),
-        .rstn(rstn),
+        .rstn(rstn_xcorr),
         .din(decim_out_if),
         .dout(xcorr_out_if)
     );
@@ -118,7 +130,7 @@ module tdoa_direction_finder #(
         .TID_WIDTH(XCORR_TID_WIDTH)
     ) peak_finder_i (
         .clk(clk),
-        .rstn(rstn),
+        .rstn(rstn_peak),
         .din(xcorr_out_if),
         .dout(peak_finder_out_if)
     );
@@ -136,7 +148,7 @@ module tdoa_direction_finder #(
         .OUT_FRAC(DF_OUT_FRAC)
     ) direction_finder_i (
         .clk(clk),
-        .rstn(rstn),
+        .rstn(rstn_df),
         .din(peak_finder_out_if),
         .dout(direction_estimator_out_if)
     );
@@ -147,7 +159,7 @@ module tdoa_direction_finder #(
         .NUM_CHANNELS(3)
     ) moving_average_filter_i (
         .clk(clk),
-        .rstn(rstn),
+        .rstn(rstn_mavg),
         .din(direction_estimator_out_if),
         .dout(dout)
     );

@@ -115,7 +115,7 @@ module udp_stack
     // ------------------------------------------------------------------
     // RX
     // ------------------------------------------------------------------
-    eth_hdr_if                  rx_eth_hdr_i ();
+    /*eth_hdr_if                  rx_eth_hdr_i ();
     ipv4_hdr_if                 rx_ip_hdr_i ();
     axis_tlast_if #(.WIDTH(8))  rx_eth ();
     axis_tlast_if #(.WIDTH(8))  rx_ip ();
@@ -197,6 +197,6 @@ module udp_stack
     assign rx_ip_hdr.dst_ip   = rx_dst_ip;
     assign rx_ip_hdr.ttl      = rx_ttl;
     assign rx_ip_hdr.protocol = rx_protocol;
-    assign rx_ip_hdr.length   = rx_ip_length;
+    assign rx_ip_hdr.length   = rx_ip_length;*/
 
 endmodule
