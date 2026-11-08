@@ -1,6 +1,7 @@
 module simple_dual_port_bram #(
     parameter WIDTH  = 8,
-    parameter AWIDTH = 4 // Depth is 2^AWIDTH
+    parameter AWIDTH = 4, // Depth is 2^AWIDTH
+    parameter DEPTH  = 1 << AWIDTH // Can be less, so the synthesizer doesn't round up the RAM
 ) (
     input  logic              clka,
     input  logic              wea,
@@ -14,7 +15,7 @@ module simple_dual_port_bram #(
     output logic [WIDTH-1:0]  doutb
 );
 
-    logic [WIDTH-1:0] ram[1 << AWIDTH];
+    logic [WIDTH-1:0] ram[DEPTH];
 
     always @(posedge clka) begin
         if(ena) begin

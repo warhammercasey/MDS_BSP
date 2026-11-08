@@ -1,0 +1,35 @@
+# GTKWave signals for the fir_decimator test. Paths are relative to tb_fir_decimator.
+# Shows the 8 channel lowpass instance.
+# Format: see sim/waves.py
+
+clk
+g_lowpass.rstn
+
+group Input
+    g_lowpass.din.tvalid
+    g_lowpass.din.tready
+    g_lowpass.din.tid       dec
+    g_lowpass.din.tdata     hex
+end
+
+group Filter
+    g_lowpass.dut.state
+    g_lowpass.dut.current_channel     dec
+    g_lowpass.dut.input_data_ready    bin
+    g_lowpass.dut.tap_index           dec
+    g_lowpass.dut.data_index          dec
+    g_lowpass.dut.tap_sample          sdec
+    g_lowpass.dut.input_sample_i      sdec
+    g_lowpass.dut.accumulated_i       sdec
+end
+
+group Output
+    g_lowpass.dout.tvalid
+    g_lowpass.dout.tready
+    g_lowpass.dout.tid      dec
+    g_lowpass.dout.tdata    hex
+end
+
+group Received (I, per channel)
+    g_lowpass.rx_i*   analog
+end

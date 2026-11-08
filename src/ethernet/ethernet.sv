@@ -1,23 +1,28 @@
-// Ethernet: streams the ADC and microphone samples out as RTP over UDP, through the
-// RMII PHY. The PHY's management interface (eth_smi) is separate.
+// Ethernet: streams the ADC samples, microphone samples and direction estimates out as
+// RTP over UDP, through the RMII PHY. The PHY's management interface (eth_smi) is
+// separate.
 //
 //   adc_axis -> CDC -> rtp_packetizer (ADC_SSRC) --\
-//                                                   axis_packet_switch -> udp_stack -> rmii
-//   mic_axis -> CDC -> rtp_packetizer (MIC_SSRC) --/                         ^   |
-//                                                               udp_stack_regs (APB)
+//   mic_axis -> CDC -> rtp_packetizer (MIC_SSRC) ---> axis_packet_switch -> udp_stack -> rmii
+//   dir_axis -> split x,y,z -> CDC -> rtp_packetizer (DIR_SSRC) --/            ^   |
+//                                                                 udp_stack_regs (APB)
 //
-// Each source is one RTP stream of interleaved channels, told apart by SSRC; both go
-// to the same UDP port. Sample streams must be in channel order (tid 0, 1, 2, ...).
+// Each source is one RTP stream of interleaved channels, told apart by SSRC; all go to
+// the same UDP port. Sample streams must be in channel order (tid 0, 1, 2, ...).
+// Directions are 3 channels, x, y and z, of DIR_BITS each (L16 for 16 bits).
 //
-// Packet size: RTP_PAYLOAD_BYTES is the most sample bytes per packet. Each stream puts
-// as many whole frames (one sample of every channel) in a packet as fit, so its
-// packets are always the same size:
+// Packet size: RTP_PAYLOAD_BYTES is the most sample bytes per packet. The ADC and mic
+// streams put as many whole frames (one sample of every channel) in a packet as fit,
+// so their packets are always the same size:
 //   frames per packet = floor(RTP_PAYLOAD_BYTES / (channels * bytes per sample))
 // Use a multiple of both streams' frame sizes to fill packets exactly. It must fit in
-// one datagram: RTP_PAYLOAD_BYTES <= 1472 - 12 = 1460.
+// one datagram: RTP_PAYLOAD_BYTES <= 1472 - 12 = 1460. Directions are slow (one per
+// correlation window), so their packets are DIR_FRAMES directions instead, to keep the
+// latency down.
 //
 // It also sizes the buffers, which are most of this module's block RAM:
 //   - the switch's per-stream packet buffers: 1.5 packets, rounded up to a power of 2
+//     (the direction stream's for its own, small, packets)
 //   - the TX frame buffer in udp_stack: one frame, rounded up to a power of 2
 // The RX frame buffer is fixed (RX_AWIDTH), as frames from outside can be any size.
 //
@@ -46,6 +51,11 @@ module ethernet
     parameter logic [31:0] MIC_SSRC          = 32'h0000_0002,
     parameter logic [6:0]  MIC_PAYLOAD_TYPE  = 7'd97,
 
+    parameter              DIR_BITS          = 16,  // Each of x, y, z
+    parameter              DIR_FRAMES        = 1,   // Directions per packet
+    parameter logic [31:0] DIR_SSRC          = 32'h0000_0003,
+    parameter logic [6:0]  DIR_PAYLOAD_TYPE  = 7'd98,
+
     parameter              CDC_AWIDTH        = 4,   // Sample CDC FIFOs, 2^CDC_AWIDTH samples
     parameter              TX_BUFFER         = 1,   // TX frame buffer in udp_stack (see above)
     parameter              RX_AWIDTH         = 12   // RX frame buffer, 2^RX_AWIDTH bytes
@@ -54,6 +64,8 @@ module ethernet
     input  logic        rstn,
     input  logic        clk_io,     // Clock of the sample streams
     input  logic        rstn_io,
+    input  logic        clk_dir,    // Clock of the direction stream
+    input  logic        rstn_dir,
 
     // RMII PHY
     output logic [1:0]  rmii_txd,
@@ -68,30 +80,41 @@ module ethernet
 
     // Samples, on clk_io
     axis_tid_if.slv     adc_axis,
-    axis_tid_if.slv     mic_axis
+    axis_tid_if.slv     mic_axis,
+
+    // Directions {x, y, z}, DIR_BITS*3 wide, on clk_dir
+    axis_if.slv         dir_axis
 );
 
     // ------------------------------------------------------------------
     // Sizes
     // ------------------------------------------------------------------
+    localparam DIR_CHANNELS     = 3; // x, y, z
+    localparam DIR_ID_WIDTH     = 2;
+
     localparam ADC_SAMPLE_BYTES = (ADC_BITS + 7) / 8;
     localparam MIC_SAMPLE_BYTES = (MIC_BITS + 7) / 8;
+    localparam DIR_SAMPLE_BYTES = (DIR_BITS + 7) / 8;
     localparam ADC_FRAMES       = RTP_PAYLOAD_BYTES / (ADC_CHANNELS * ADC_SAMPLE_BYTES);
     localparam MIC_FRAMES       = RTP_PAYLOAD_BYTES / (MIC_CHANNELS * MIC_SAMPLE_BYTES);
 
     // RTP packet (= UDP payload) bytes
     localparam ADC_RTP_BYTES    = RTP_HDR_BYTES + ADC_FRAMES * ADC_CHANNELS * ADC_SAMPLE_BYTES;
     localparam MIC_RTP_BYTES    = RTP_HDR_BYTES + MIC_FRAMES * MIC_CHANNELS * MIC_SAMPLE_BYTES;
+    localparam DIR_RTP_BYTES    = RTP_HDR_BYTES + DIR_FRAMES * DIR_CHANNELS * DIR_SAMPLE_BYTES;
     localparam MAX_RTP_BYTES    = ADC_RTP_BYTES > MIC_RTP_BYTES ? ADC_RTP_BYTES : MIC_RTP_BYTES;
 
-    // Buffers. A frame here is never padded: an RTP packet alone is over the minimum.
+    // Buffers. Frames shorter than the minimum (small direction packets) are padded
+    // by eth_packetizer.
     localparam SWITCH_AWIDTH    = $clog2(MAX_RTP_BYTES + MAX_RTP_BYTES / 2);
+    localparam DIR_AWIDTH       = $clog2(DIR_RTP_BYTES + DIR_RTP_BYTES / 2);
     localparam TX_FRAME_BYTES   = ETH_HDR_BYTES + IPV4_HDR_BYTES + UDP_HDR_BYTES + MAX_RTP_BYTES + ETH_FCS_BYTES;
     localparam TX_AWIDTH        = $clog2(TX_FRAME_BYTES);
 
     // Switch inputs
     localparam ADC_STREAM = 0;
     localparam MIC_STREAM = 1;
+    localparam DIR_STREAM = 2;
 
 
     // ------------------------------------------------------------------
@@ -126,13 +149,41 @@ module ethernet
         .axis_out(mic_samples)
     );
 
+    // Directions are split into x, y, z first, so the CDC FIFO is one component wide
+    axis_tid_if #(.WIDTH(DIR_BITS), .ID_WIDTH(DIR_ID_WIDTH)) dir_components ();
+    axis_tid_if #(.WIDTH(DIR_BITS), .ID_WIDTH(DIR_ID_WIDTH)) dir_samples ();
+
+    axis_tid_serializer #(
+        .WIDTH(DIR_BITS),
+        .N(DIR_CHANNELS),
+        .ID_WIDTH(DIR_ID_WIDTH)
+    ) dir_split (
+        .clk(clk_dir),
+        .rstn(rstn_dir),
+        .axis_in(dir_axis),
+        .axis_out(dir_components)
+    );
+
+    axis_tid_cdc_fifo #(
+        .WIDTH(DIR_BITS),
+        .ID_WIDTH(DIR_ID_WIDTH),
+        .AWIDTH(CDC_AWIDTH)
+    ) dir_cdc (
+        .clka(clk_dir),
+        .rstna(rstn_dir),
+        .clkb(clk),
+        .rstnb(rstn),
+        .axis_in(dir_components),
+        .axis_out(dir_samples)
+    );
+
 
     // ------------------------------------------------------------------
     // RTP, one stream per source, merged a packet at a time
     // ------------------------------------------------------------------
-    axis_tlast_if #(.WIDTH(8)) rtp_streams [2] ();
+    axis_tlast_if #(.WIDTH(8)) rtp_streams [3] ();
     axis_tlast_if #(.WIDTH(8)) rtp_tx ();
-    logic rtp_tx_sel;
+    logic [1:0] rtp_tx_sel;
 
     rtp_packetizer #(
         .SSRC(ADC_SSRC),
@@ -162,10 +213,25 @@ module ethernet
         .axis_out(rtp_streams[MIC_STREAM])
     );
 
+    rtp_packetizer #(
+        .SSRC(DIR_SSRC),
+        .PAYLOAD_TYPE(DIR_PAYLOAD_TYPE),
+        .SAMPLE_BITS(DIR_BITS),
+        .CHANNELS(DIR_CHANNELS),
+        .ID_WIDTH(DIR_ID_WIDTH),
+        .FRAMES_PER_PACKET(DIR_FRAMES)
+    ) dir_rtp (
+        .clk(clk),
+        .rstn(rstn),
+        .axis_in(dir_samples),
+        .axis_out(rtp_streams[DIR_STREAM])
+    );
+
     axis_packet_switch #(
         .WIDTH(8),
-        .N(2),
-        .AWIDTH(SWITCH_AWIDTH)
+        .N(3),
+        .AWIDTH(SWITCH_AWIDTH),
+        .AWIDTHS({8'(DIR_AWIDTH), 8'd0, 8'd0}) // The direction stream's buffer for its own packets
     ) rtp_switch (
         .clk(clk),
         .rstn(rstn),
@@ -182,7 +248,8 @@ module ethernet
     assign udp_tx_payload.tvalid = rtp_tx.tvalid;
     assign udp_tx_payload.tdata  = rtp_tx.tdata;
     assign rtp_tx.tready         = udp_tx_payload.tready;
-    assign udp_tx_length         = rtp_tx_sel == MIC_STREAM ? 16'(MIC_RTP_BYTES) : 16'(ADC_RTP_BYTES);
+    assign udp_tx_length         = rtp_tx_sel == MIC_STREAM ? 16'(MIC_RTP_BYTES) :
+                                   rtp_tx_sel == DIR_STREAM ? 16'(DIR_RTP_BYTES) : 16'(ADC_RTP_BYTES);
 
 
     // ------------------------------------------------------------------

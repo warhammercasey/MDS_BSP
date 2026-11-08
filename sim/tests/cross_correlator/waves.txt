@@ -1,0 +1,40 @@
+# GTKWave signals for the cross_correlator test. Paths are relative to tb_cross_correlator.
+# Shows the 4 channel instance.
+# Format: see sim/waves.py
+
+clk
+g_4ch.rstn
+
+group Input
+    g_4ch.din.tvalid
+    g_4ch.din.tready
+    g_4ch.din.tid       dec
+    g_4ch.din.tdata     hex
+    g_4ch.dut.fill*     dec
+end
+
+group Sequencing
+    g_4ch.dut.state
+    g_4ch.dut.skip          dec
+    g_4ch.dut.start_ptr     dec
+    g_4ch.dut.pair          dec
+    g_4ch.dut.chan_a        dec
+    g_4ch.dut.chan_b        dec
+    g_4ch.dut.pass          dec
+    g_4ch.dut.m0            sdec
+    g_4ch.dut.t             dec
+    g_4ch.dut.advance
+end
+
+group MACs
+    g_4ch.dut.acc_re*       sdec
+    g_4ch.dut.acc_im*       sdec
+end
+
+group Output
+    g_4ch.dout.tvalid
+    g_4ch.dout.tready
+    g_4ch.dout.tid      dec
+    g_4ch.dout.tlast
+    g_4ch.dout.tdata    hex
+end

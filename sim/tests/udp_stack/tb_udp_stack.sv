@@ -547,7 +547,7 @@ module tb_udp_stack;
         apb_check(TX_DST_MAC_LO, 32'hFFFF_FFFF);
         apb_check(LOCAL_MAC_HI, 32'h0000_0200);
         apb_check(LOCAL_MAC_LO, 32'h0000_0001);
-        apb_check(LOCAL_IP, 32'hC0A8_0164);
+        apb_check(LOCAL_IP, 32'hC0A8_0064);
         apb_check(TX_DST_IP, 32'hFFFF_FFFF);
         apb_check(TX_TTL, 32'd64);
         apb_check(TX_PORTS, {16'd5000, 16'd5000});

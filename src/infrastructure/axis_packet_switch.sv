@@ -9,11 +9,13 @@
 //
 // Each buffer holds 2^AWIDTH beats. It must hold a whole packet, or the input blocks for
 // good (see axis_packet_fifo), plus whatever the input sends while it waits for its
-// turn.
+// turn. AWIDTHS can size inputs separately: byte i is input i's AWIDTH, 0 for the
+// default. E.g. N = 3, AWIDTHS = 24'h05_00_00 gives input 2 a 32 beat buffer.
 module axis_packet_switch #(
     parameter WIDTH  = 8,
     parameter N      = 2,
-    parameter AWIDTH = 11
+    parameter AWIDTH = 11,
+    parameter logic [8*N-1:0] AWIDTHS = '0
 )(
     input  logic clk,
     input  logic rstn,
@@ -39,9 +41,10 @@ module axis_packet_switch #(
 
     generate
         for (genvar i = 0; i < N; i++) begin : g_in
+            localparam IN_AWIDTH = AWIDTHS[8*i +: 8] != 0 ? AWIDTHS[8*i +: 8] : AWIDTH;
             axis_packet_fifo #(
                 .WIDTH(WIDTH),
-                .AWIDTH(AWIDTH),
+                .AWIDTH(IN_AWIDTH),
                 .DROP_WHEN_FULL(0)
             ) packet_buffer (
                 .clk(clk),

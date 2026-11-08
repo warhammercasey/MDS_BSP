@@ -1,0 +1,33 @@
+# GTKWave signals for the mixer test. Paths are relative to tb_mixer.
+# Shows the 8 channel instance.
+# Format: see sim/waves.py
+
+clk
+g_mics.rstn
+
+group Input
+    g_mics.din.tvalid
+    g_mics.din.tready
+    g_mics.din.tid       dec
+    g_mics.din.tdata     sdec
+end
+
+group Mixer
+    g_mics.dut.lut_phase     dec
+    g_mics.dut.s1_quadrant   dec
+    g_mics.dut.lo_i          sdec
+    g_mics.dut.lo_q          sdec
+    g_mics.dut.product_i     sdec
+end
+
+group Output
+    g_mics.dout.tvalid
+    g_mics.dout.tready
+    g_mics.dout.tid      dec
+    g_mics.dout.tdata    hex
+end
+
+group Received (per channel)
+    g_mics.rx_i*   analog
+    g_mics.rx_q*   analog
+end

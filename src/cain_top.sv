@@ -89,6 +89,11 @@ module cain_top (
     localparam logic [31:0] MIC_RTP_SSRC = 32'h4D49_4330; // "MIC0"
     localparam logic [6:0]  ADC_RTP_PT   = 7'd96;         // Dynamic payload types
     localparam logic [6:0]  MIC_RTP_PT   = 7'd97;
+    // Direction estimates go out as a third stream: {x, y, z}, DSP_DF_OUT_WIDTH bits each
+    // (Q2.14 for 16 bits), one per correlation window, DIR_RTP_FRAMES per packet
+    localparam logic [31:0] DIR_RTP_SSRC   = 32'h4449_5230; // "DIR0"
+    localparam logic [6:0]  DIR_RTP_PT     = 7'd98;
+    localparam              DIR_RTP_FRAMES = 1;
     localparam ETH_TX_BUFFER = 0; // 0 drops the Ethernet TX frame buffer (one frame of RAM), see ethernet.sv
 
     localparam real LED_CLK_FREQ = CLK_50_FREQ;
@@ -102,6 +107,39 @@ module cain_top (
     localparam SMI_APB_PERIPH_NUM = 0;
 
     localparam UDP_APB_PERIPH_NUM = 1;  // udp_stack_regs, register map in udp_stack_regs.sv
+
+
+    // DSP Core parameters
+    localparam DSP_INPUT_PIPE_STAGES = 2;  // Register slices between the I2S CDC FIFO and the DSP, for timing
+    localparam DSP_INPUT_FS = CLK_IO_FREQ/((CLK_IO_FREQ + I2S_CLK_FREQ - 1) / I2S_CLK_FREQ)/64;
+    localparam DSP_SHIFT_FREQ = 5_000;
+    localparam DSP_MIXER_LUT_AWIDTH = 8;
+    // The table's own resolution: no phase truncation, so no truncation spurs. The LO comes out
+    // at 107/1024 * fs = 5004.9 Hz, the same for every channel, which the correlation ignores.
+    localparam DSP_MIXER_PHASE_WIDTH = DSP_MIXER_LUT_AWIDTH + 2;
+    localparam DSP_MIXER_INIT_FILE = "../src/dsp/building_blocks/mixer_lut.hex";
+    localparam DSP_MIXER_INIT_HEX = 1;
+
+    localparam DSP_DECIM_TAPS = 128;
+    localparam DSP_DECIMATION = 4;
+    localparam DSP_DECIM_INIT_FILE = "../src/dsp/building_blocks/decimator_coef.hex";
+    localparam DSP_DECIM_INIT_HEX = 1;
+    
+    localparam DSP_XCORR_WINDOW_LEN = 1024;
+    localparam DSP_XCORR_WINDOW_STEP = 32;
+    localparam DSP_XCORR_MAX_LAG = 10;
+    // Calculates the number of MACs we need to do per clock to achieve the input sample rate
+    localparam DSP_XCORR_MACS = int'($ceil(real'(DSP_XCORR_WINDOW_LEN) * (real'(DSP_XCORR_MAX_LAG)*2 + 1) * real'(I2S_CHANNELS*(I2S_CHANNELS-1)/2) * real'(DSP_INPUT_FS) / real'(DSP_DECIMATION) / real'(CLK_CORE_FREQ) / real'(DSP_XCORR_WINDOW_STEP)));
+    localparam DSP_XCORR_OUT_WIDTH = 32;
+
+    localparam DSP_DF_COEF_FILE = "../src/dsp/building_blocks/direction_matrix.hex";
+    localparam DSP_DF_COEF_FRAC = 23;
+    localparam DSP_DF_OUT_WIDTH = 16;
+    localparam DSP_DF_OUT_FRAC = 14;
+
+    localparam DSP_MOVAVG_LOG2_WINDOW_SIZE = 4;
+    
+
 
     
     // ##################################################################
@@ -282,7 +320,8 @@ module cain_top (
     
     // ------------------------------------------------------------------
     // Ethernet
-    //   ADC and microphone samples stream out as RTP over UDP, through the RMII PHY.
+    //   ADC samples, microphone samples and direction estimates stream out as RTP over
+    //   UDP, through the RMII PHY.
     //   The UDP/IP settings are registers on the APB bus (map in udp_stack_regs.sv).
     // ------------------------------------------------------------------
     apb_if #(
@@ -290,6 +329,11 @@ module cain_top (
         .DATA_WIDTH(APB_DATA_WIDTH),
         .SEL_WIDTH(1)
     ) udp_apb ();
+
+    // Direction estimates from the DSP core, on clk_core
+    axis_if #(
+        .WIDTH(3*DSP_DF_OUT_WIDTH)
+    ) df_axis_core ();
     ethernet #(
         .RTP_PAYLOAD_BYTES(RTP_PAYLOAD_BYTES),
         .ADC_BITS(ADC_BITS),
@@ -302,12 +346,18 @@ module cain_top (
         .MIC_ID_WIDTH($clog2(I2S_CHANNELS)),
         .MIC_SSRC(MIC_RTP_SSRC),
         .MIC_PAYLOAD_TYPE(MIC_RTP_PT),
+        .DIR_BITS(DSP_DF_OUT_WIDTH),
+        .DIR_FRAMES(DIR_RTP_FRAMES),
+        .DIR_SSRC(DIR_RTP_SSRC),
+        .DIR_PAYLOAD_TYPE(DIR_RTP_PT),
         .TX_BUFFER(ETH_TX_BUFFER)
     ) ethernet_i (
         .clk        (clk_50),
         .rstn       (rstn_50),
         .clk_io     (clk_io),
         .rstn_io    (rstn_io),
+        .clk_dir    (clk_core),
+        .rstn_dir   (rstn_core),
         .rmii_txd   (rmii_txd),
         .rmii_txen  (rmii_txen),
         .rmii_rstn  (rmii_rstn),
@@ -317,7 +367,8 @@ module cain_top (
         .rmii_rxerr (rmii_rxerr),
         .apb        (udp_apb),
         .adc_axis   (adc_axis),
-        .mic_axis   (i2s_axis_copies[I2S_COPY_ETH])
+        .mic_axis   (i2s_axis_copies[I2S_COPY_ETH]),
+        .dir_axis   (df_axis_core)
     );
 
 
@@ -443,7 +494,7 @@ module cain_top (
         .WIDTH(I2S_BITS), // Data width
         .ID_WIDTH($clog2(I2S_CHANNELS)),
         .AWIDTH(3)
-    ) axis_tid_cdc_fifo_adc_data (
+    ) axis_tid_cdc_fifo_i2s_data (
         .clka(clk_io),
         .rstna(rstn_io),
         .clkb(clk_core),
@@ -452,6 +503,65 @@ module cain_top (
         .axis_in(i2s_axis_copies[I2S_COPY_CORE]),
         .axis_out(i2s_axis_core)
     );
-    assign i2s_axis_core.tready = 1'b1;
 
+    // Pipeline the microphone data into the DSP core
+    axis_tid_if #(
+        .WIDTH(I2S_BITS),
+        .ID_WIDTH($clog2(I2S_CHANNELS))
+    ) i2s_axis_core_piped();
+    axis_tid_register_slice #(
+        .WIDTH(I2S_BITS),
+        .ID_WIDTH($clog2(I2S_CHANNELS)),
+        .STAGES(DSP_INPUT_PIPE_STAGES),
+        .REGISTER_READY(1)
+    ) i2s_core_reg_slice (
+        .clk(clk_core),
+        .rstn(rstn_core),
+
+        .axis_in(i2s_axis_core),
+        .axis_out(i2s_axis_core_piped)
+    );
+
+
+
+
+    
+    // ##################################################################
+    // DSP Core
+    // ##################################################################
+
+    tdoa_direction_finder #(
+        .WIDTH(I2S_BITS),
+        .CHANNELS(I2S_CHANNELS),
+
+        .SAMPLE_RATE(DSP_INPUT_FS),
+        .TONE_FREQ(DSP_SHIFT_FREQ),
+        .PHASE_WIDTH(DSP_MIXER_PHASE_WIDTH),
+        .LUT_AWIDTH(DSP_MIXER_LUT_AWIDTH),
+        .MIXER_INIT_FILE(DSP_MIXER_INIT_FILE),
+        .MIXER_INIT_HEX(DSP_MIXER_INIT_HEX),
+
+        .TAPS(DSP_DECIM_TAPS),
+        .DECIMATION(DSP_DECIMATION),
+        .DECIM_INIT_FILE(DSP_DECIM_INIT_FILE),
+        .DECIM_INIT_HEX(DSP_DECIM_INIT_HEX),
+
+        .WINDOW_LEN(DSP_XCORR_WINDOW_LEN),
+        .WINDOW_STEP(DSP_XCORR_WINDOW_STEP),
+        .MAX_LAG(DSP_XCORR_MAX_LAG),
+        .XCORR_MACS(DSP_XCORR_MACS),
+        .XCORR_OUT_WIDTH(DSP_XCORR_OUT_WIDTH),
+
+        .DF_COEF_FILE(DSP_DF_COEF_FILE),
+        .DF_COEF_FRAC(DSP_DF_COEF_FRAC),
+        .DF_OUT_WIDTH(DSP_DF_OUT_WIDTH),
+        .DF_OUT_FRAC(DSP_DF_OUT_FRAC),
+
+        .MOVAVG_LOG2_WINDOW_SIZE(DSP_MOVAVG_LOG2_WINDOW_SIZE)
+    ) tdoa_direction_finder_i (
+        .clk(clk_core),
+        .rstn(rstn_core),
+        .din(i2s_axis_core_piped),
+        .dout(df_axis_core)
+    );
 endmodule

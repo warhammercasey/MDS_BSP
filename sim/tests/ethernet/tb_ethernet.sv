@@ -1,12 +1,13 @@
 `timescale 1ns/1ps
 `include "tb_macros.svh"
 
-// ethernet test: ADC and microphone sample streams in (on clk_io), RTP/UDP frames out
-// on TXEN/TXD (clk_50), as on the board.
+// ethernet test: ADC and microphone sample streams in (on clk_io), direction vectors in
+// (on clk_dir, like clk_core), RTP/UDP frames out on TXEN/TXD (clk_50), as on the board.
 //
 // RTP_PAYLOAD_BYTES is 64 here, which isn't a multiple of 24, so the streams have
 // different packet sizes: ADC 8 frames x 8 x 1 byte = 64, mics 2 frames x 8 x 3 bytes
-// = 48. That checks the datagram length follows the stream.
+// = 48, and directions 2 x {x, y, z} x 2 bytes = 12. That checks the datagram length
+// follows the stream.
 //
 // Every frame on the wire is rebuilt here and compared byte for byte: Ethernet, IPv4
 // (identification counting up per frame) and UDP headers from the registers, own
@@ -30,30 +31,36 @@ module tb_ethernet #(
     `TB_INIT
     `TB_WATCHDOG(30_000_000) // 30 ms
 
-    localparam real CLK_PERIOD_NS    = 20.0;                 // clk_50
-    localparam real CLK_IO_PERIOD_NS = 1.0e9 / 73.5714e6;    // clk_io
+    localparam real CLK_PERIOD_NS     = 20.0;                 // clk_50
+    localparam real CLK_IO_PERIOD_NS  = 1.0e9 / 73.5714e6;    // clk_io
+    localparam real CLK_DIR_PERIOD_NS = 5.0;                  // clk_core
 
     localparam int          RTP_PAYLOAD_BYTES = 64;
+    localparam int          DIR_FRAMES = 2;
     localparam logic [31:0] ADC_SSRC = 32'h4144_4330;
     localparam logic [31:0] MIC_SSRC = 32'h4D49_4330;
+    localparam logic [31:0] DIR_SSRC = 32'h4449_5230;
     localparam logic [6:0]  ADC_PT   = 7'd96;
     localparam logic [6:0]  MIC_PT   = 7'd97;
+    localparam logic [6:0]  DIR_PT   = 7'd98;
 
-    // Per stream: 0 = ADC, 1 = mics
-    localparam int          BITS     [2] = '{8, 18};
-    localparam int          BYTES    [2] = '{1, 3};
-    localparam int          CHANNELS = 8;
-    localparam int          FRAMES   [2] = '{RTP_PAYLOAD_BYTES / (8 * 1), RTP_PAYLOAD_BYTES / (8 * 3)};
-    localparam logic [31:0] SSRCS    [2] = '{ADC_SSRC, MIC_SSRC};
-    localparam logic [6:0]  PTS      [2] = '{ADC_PT, MIC_PT};
-    localparam string       NAMES    [2] = '{"ADC", "mic"};
+    // Per stream: 0 = ADC, 1 = mics, 2 = directions
+    localparam int          NS            = 3;
+    localparam int          BITS     [NS] = '{8, 18, 16};
+    localparam int          BYTES    [NS] = '{1, 3, 2};
+    localparam int          CHANNELS [NS] = '{8, 8, 3};
+    localparam int          FRAMES   [NS] = '{RTP_PAYLOAD_BYTES / (8 * 1), RTP_PAYLOAD_BYTES / (8 * 3), DIR_FRAMES};
+    localparam logic [31:0] SSRCS    [NS] = '{ADC_SSRC, MIC_SSRC, DIR_SSRC};
+    localparam logic [6:0]  PTS      [NS] = '{ADC_PT, MIC_PT, DIR_PT};
+    localparam string       NAMES    [NS] = '{"ADC", "mic", "direction"};
 
     `define PUSH_BE(Q, V, N) for (int k_ = (N) - 1; k_ >= 0; k_--) Q.push_back(8'((V) >> (8 * k_)));
 
-    logic clk = 1'b0, clk_io = 1'b0;
-    always #(CLK_PERIOD_NS / 2)    clk    = ~clk;
-    always #(CLK_IO_PERIOD_NS / 2) clk_io = ~clk_io;
-    logic rstn = 1'b0, rstn_io = 1'b0;
+    logic clk = 1'b0, clk_io = 1'b0, clk_dir = 1'b0;
+    always #(CLK_PERIOD_NS / 2)     clk     = ~clk;
+    always #(CLK_IO_PERIOD_NS / 2)  clk_io  = ~clk_io;
+    always #(CLK_DIR_PERIOD_NS / 2) clk_dir = ~clk_dir;
+    logic rstn = 1'b0, rstn_io = 1'b0, rstn_dir = 1'b0;
 
     // ------------------------------------------------------------------
     // DUT
@@ -61,6 +68,7 @@ module tb_ethernet #(
     apb_if #(.ADDR_WIDTH(8), .DATA_WIDTH(32), .SEL_WIDTH(1)) apb ();
     axis_tid_if #(.WIDTH(8),  .ID_WIDTH(3)) adc_axis ();
     axis_tid_if #(.WIDTH(18), .ID_WIDTH(3)) mic_axis ();
+    axis_if     #(.WIDTH(48))               dir_axis ();
 
     logic [1:0] txd;
     logic       txen;
@@ -71,14 +79,16 @@ module tb_ethernet #(
         .RTP_PAYLOAD_BYTES(RTP_PAYLOAD_BYTES),
         .ADC_BITS(8),  .ADC_CHANNELS(8), .ADC_ID_WIDTH(3), .ADC_SSRC(ADC_SSRC), .ADC_PAYLOAD_TYPE(ADC_PT),
         .MIC_BITS(18), .MIC_CHANNELS(8), .MIC_ID_WIDTH(3), .MIC_SSRC(MIC_SSRC), .MIC_PAYLOAD_TYPE(MIC_PT),
+        .DIR_BITS(16), .DIR_FRAMES(DIR_FRAMES), .DIR_SSRC(DIR_SSRC), .DIR_PAYLOAD_TYPE(DIR_PT),
         .TX_BUFFER(TX_BUFFER)
     ) dut (
-        .clk(clk), .rstn(rstn), .clk_io(clk_io), .rstn_io(rstn_io),
+        .clk(clk), .rstn(rstn), .clk_io(clk_io), .rstn_io(rstn_io), .clk_dir(clk_dir), .rstn_dir(rstn_dir),
         .rmii_txd(txd), .rmii_txen(txen), .rmii_rstn(), .rmii_int(1'b1),
         .rmii_crs_dv(phy_crs), .rmii_rxd(phy_rxd), .rmii_rxerr(1'b0),
         .apb(apb),
         .adc_axis(adc_axis),
-        .mic_axis(mic_axis)
+        .mic_axis(mic_axis),
+        .dir_axis(dir_axis)
     );
 
     // ------------------------------------------------------------------
@@ -152,11 +162,13 @@ module tb_ethernet #(
     // RTP model: the packets each stream should send, built as samples are queued
     // (in this test every sample goes in, in channel order)
     // ------------------------------------------------------------------
-    byte unsigned expected [2][$][$];
-    byte unsigned m_pkt    [2][$];
-    int unsigned  m_count  [2] = '{0, 0};
-    int unsigned  m_seq    [2] = '{0, 0};
-    int unsigned  m_frames [2] = '{0, 0};
+    // Queue arrays sized to a power of 2: Verilator 5.020 generates C++ that doesn't
+    // compile when indexing an array of queues of another size
+    byte unsigned expected [4][$][$];
+    byte unsigned m_pkt    [4][$];
+    int unsigned  m_count  [NS] = '{default: 0};
+    int unsigned  m_seq    [NS] = '{default: 0};
+    int unsigned  m_frames [NS] = '{default: 0};
 
     function automatic void model(int s, int unsigned tid, logic [23:0] data);
         logic [23:0] v;
@@ -172,7 +184,7 @@ module tb_ethernet #(
         for (int k = BYTES[s] - 1; k >= 0; k--) m_pkt[s].push_back(v[8*k +: 8]);
         if (tid == 0) m_frames[s]++;
         m_count[s]++;
-        if (m_count[s] == FRAMES[s] * CHANNELS) begin
+        if (m_count[s] == FRAMES[s] * CHANNELS[s]) begin
             expected[s].push_back(m_pkt[s]);
             m_seq[s]++;
             m_count[s] = 0;
@@ -187,13 +199,50 @@ module tb_ethernet #(
 
     function automatic void queue_frames(int s, int unsigned n);
         repeat (n) begin
-            for (int c = 0; c < CHANNELS; c++) begin
+            for (int c = 0; c < CHANNELS[s]; c++) begin
                 logic [23:0] d = 24'($urandom) & ((24'h1 << BITS[s]) - 1);
                 src_q[s].push_back({3'(c), d});
                 model(s, c, d);
             end
         end
     endfunction
+
+    // Directions (clk_dir): {x, y, z} beats from a queue, dir_period cycles apart
+    logic [47:0] dir_q[$];
+    int unsigned dir_period = 0, dir_wait = 0;
+
+    function automatic void queue_directions(int unsigned n);
+        repeat (n) begin
+            logic [47:0] v = {16'($urandom), 16'($urandom), 16'($urandom)};
+            dir_q.push_back(v);
+            for (int c = 0; c < 3; c++) model(2, c, 24'(v[(2 - c) * 16 +: 16]));
+        end
+    endfunction
+
+    always @(posedge clk_dir) begin
+        bit hs;
+        if (!rstn_dir) begin
+            dir_axis.tvalid <= 1'b0;
+            dir_axis.tdata  <= '0;
+        end else begin
+            hs = dir_axis.tvalid && dir_axis.tready;
+            if (hs) begin
+                void'(dir_q.pop_front());
+                dir_wait = dir_period;
+            end
+            if (!dir_axis.tvalid || hs) begin
+                if (dir_wait > 0) begin
+                    dir_wait--;
+                    dir_axis.tvalid <= 1'b0;
+                end else if (dir_q.size() > 0) begin
+                    dir_axis.tvalid <= 1'b1;
+                    dir_axis.tdata  <= dir_q[0];
+                end else begin
+                    dir_axis.tvalid <= 1'b0;
+                end
+            end
+        end
+    end
 
     int unsigned adc_wait = 0, mic_wait = 0;
 
@@ -261,7 +310,7 @@ module tb_ethernet #(
 
     logic [1:0]   tx_dibits[$];
     int unsigned  n_frames = 0;
-    int unsigned  n_from [2] = '{0, 0};
+    int unsigned  n_from [NS] = '{default: 0};
 
     function automatic void check_frame(byte unsigned f[$]);
         byte unsigned rtp[$], exp_rtp[$], exp[$];
@@ -273,10 +322,11 @@ module tb_ethernet #(
             tb_error($sformatf("Frame %0d: only %0d bytes {%s }", n_frames, f.size(), show(f)));
             return;
         end
+        // The RTP packet is the UDP payload (by the UDP length, so any padding is left out)
         rtp = {};
-        for (int i = 42; i < f.size() - 4; i++) rtp.push_back(f[i]);
+        for (int i = 42; i < 34 + {f[38], f[39]} && i < f.size() - 4; i++) rtp.push_back(f[i]);
         ssrc = {rtp[8], rtp[9], rtp[10], rtp[11]};
-        s = ssrc == ADC_SSRC ? 0 : ssrc == MIC_SSRC ? 1 : -1;
+        s = ssrc == ADC_SSRC ? 0 : ssrc == MIC_SSRC ? 1 : ssrc == DIR_SSRC ? 2 : -1;
         if (s < 0) begin
             tb_error($sformatf("Frame %0d: unknown SSRC 0x%08h", n_frames, ssrc));
             return;
@@ -401,31 +451,32 @@ module tb_ethernet #(
     // ------------------------------------------------------------------
     task automatic wait_sent(string name);
         int unsigned t = 0;
-        while ((expected[0].size() > 0 || expected[1].size() > 0) && t < 5_000_000) begin
+        while ((expected[0].size() > 0 || expected[1].size() > 0 || expected[2].size() > 0) && t < 5_000_000) begin
             @(posedge clk);
             t++;
         end
         repeat (200) @(posedge clk);
-        for (int s = 0; s < 2; s++)
+        for (int s = 0; s < NS; s++)
             `CHECK(expected[s].size() == 0, $sformatf("%s: %0d %s packets never came out", name, expected[s].size(), NAMES[s]))
     endtask
 
     initial begin
         byte unsigned p[$], f[$];
-        int unsigned  adc0, mic0;
+        int unsigned  adc0, mic0, dir0;
 
-        tb_info($sformatf("Testing ethernet: RTP payload %0d bytes (ADC %0d frames, mics %0d frames per packet), TX buffer %s",
-                          RTP_PAYLOAD_BYTES, FRAMES[0], FRAMES[1], TX_BUFFER ? "on" : "off"));
+        tb_info($sformatf("Testing ethernet: RTP payload %0d bytes (ADC %0d frames, mics %0d, directions %0d per packet), TX buffer %s",
+                          RTP_PAYLOAD_BYTES, FRAMES[0], FRAMES[1], FRAMES[2], TX_BUFFER ? "on" : "off"));
         repeat (5) @(posedge clk);
-        rstn    = 1'b1;
-        rstn_io = 1'b1;
+        rstn     = 1'b1;
+        rstn_io  = 1'b1;
+        rstn_dir = 1'b1;
         repeat (5) @(posedge clk);
 
         // Settings: our addresses stay at reset values
         cfg_local_mac = 48'h02_00_00_00_00_01;
-        cfg_local_ip  = 32'hC0A8_0164;
+        cfg_local_ip  = 32'hC0A8_0064; // 192.168.0.100
         cfg_dst_mac   = 48'h00_11_22_33_44_55;
-        cfg_dst_ip    = 32'hC0A8_010A;
+        cfg_dst_ip    = 32'hC0A8_000A; // 192.168.0.10
         cfg_ttl       = 8'd32;
         cfg_src_port  = 16'd6000;
         cfg_dst_port  = 16'd6001;
@@ -448,26 +499,34 @@ module tb_ethernet #(
         apb_check(RX_LENGTH, 20);
 
         // --- About the board's rates: ADC 200k samples/s, mics 4 every 576 clk_io ---
+        // (directions faster than the board's ~375/s, so the test doesn't take all day)
         tb_info("Real rate");
-        period = '{368, 144};
+        period     = '{368, 144};
+        dir_period = 4000;
         queue_frames(0, 3 * FRAMES[0]);
         queue_frames(1, 30 * FRAMES[1]);
+        queue_directions(10 * FRAMES[2]);
         wait_sent("real rate");
 
         // --- Saturated: the wire is the bottleneck ---
         tb_info("Saturated");
-        adc0   = n_from[0];
-        mic0   = n_from[1];
-        period = '{0, 0};
+        adc0       = n_from[0];
+        mic0       = n_from[1];
+        dir0       = n_from[2];
+        period     = '{0, 0};
+        dir_period = 0;
         queue_frames(0, 30 * FRAMES[0]);
         queue_frames(1, 30 * FRAMES[1]);
+        queue_directions(30 * FRAMES[2]);
         wait_sent("saturated");
-        `CHECK(n_from[0] - adc0 == 30 && n_from[1] - mic0 == 30,
-               $sformatf("Saturated: %0d ADC and %0d mic packets (expected 30 each)", n_from[0] - adc0, n_from[1] - mic0))
+        `CHECK(n_from[0] - adc0 == 30 && n_from[1] - mic0 == 30 && n_from[2] - dir0 == 30,
+               $sformatf("Saturated: %0d ADC, %0d mic and %0d direction packets (expected 30 each)",
+                         n_from[0] - adc0, n_from[1] - mic0, n_from[2] - dir0))
 
         apb_check(TX_COUNT, n_frames);
         `CHECK(n_underruns == 0, $sformatf("%0d TX underruns", n_underruns))
-        tb_info($sformatf("%0d frames: %0d ADC packets, %0d mic packets", n_frames, n_from[0], n_from[1]));
+        tb_info($sformatf("%0d frames: %0d ADC packets, %0d mic packets, %0d direction packets",
+                          n_frames, n_from[0], n_from[1], n_from[2]));
         tb_finish();
     end
 

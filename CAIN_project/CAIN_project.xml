@@ -49,6 +49,17 @@
         <efx:design_file name="../src/infrastructure/axis_packet_switch.sv" version="default" library="default"/>
         <efx:design_file name="../src/infrastructure/axis_packet_fifo.sv" version="default" library="default"/>
         <efx:design_file name="../src/infrastructure/axis_tid_broadcast.sv" version="default" library="default"/>
+        <efx:design_file name="../src/dsp/building_blocks/peak_finder.sv" version="default" library="default"/>
+        <efx:design_file name="../src/dsp/building_blocks/cross_correlator.sv" version="default" library="default"/>
+        <efx:design_file name="../src/dsp/building_blocks/mixer.sv" version="default" library="default"/>
+        <efx:design_file name="../src/dsp/building_blocks/moving_average_filter.sv" version="default" library="default"/>
+        <efx:design_file name="../src/dsp/building_blocks/fir_decimator.sv" version="default" library="default"/>
+        <efx:design_file name="../src/dsp/building_blocks/direction_estimator.sv" version="default" library="default"/>
+        <efx:design_file name="../src/dsp/tdoa_direction_finder.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ram/dual_port_rom.sv" version="default" library="default"/>
+        <efx:design_file name="../src/ram/rom.sv" version="default" library="default"/>
+        <efx:design_file name="../src/infrastructure/axis_tid_serializer.sv" version="default" library="default"/>
+        <efx:design_file name="../src/infrastructure/axis_register_slice.sv" version="default" library="default"/>
         <efx:top_vhdl_arch name=""/>
         <efx:msg_config name=""/>
         <efx:partition_definitions name=""/>
@@ -63,7 +74,11 @@
         <efx:inter_file name=""/>
     </efx:constraint_info>
     <efx:sim_info/>
-    <efx:misc_info/>
+    <efx:misc_info>
+        <efx:misc_file name="../src/dsp/building_blocks/mixer_lut.hex"/>
+        <efx:misc_file name="../src/dsp/building_blocks/direction_matrix.hex"/>
+        <efx:misc_file name="../src/dsp/building_blocks/decimator_coef.hex"/>
+    </efx:misc_info>
     <efx:ooc_info/>
     <efx:ip_info/>
     <efx:synthesis tool_name="efx_map">
@@ -134,7 +149,7 @@
     </efx:bitstream_generation>
     <efx:debugger>
         <efx:param name="work_dir" value="work_dbg" value_type="e_string"/>
-        <efx:param name="auto_instantiation" value="on" value_type="e_bool"/>
+        <efx:param name="auto_instantiation" value="off" value_type="e_bool"/>
         <efx:param name="profile" value="debug_profile.wizard.json" value_type="e_string"/>
     </efx:debugger>
 </efx:project>
