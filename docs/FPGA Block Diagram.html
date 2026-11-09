@@ -1,0 +1,1580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>CAIN Block Diagram</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen app. Header with controls, a legend strip, then a pannable diagram stage that fills the rest. */
+:root {
+  --bg: #ECEFEF; --surface: #FFFFFF; --surface-2: #F6F8F8;
+  --ink: #192125; --muted: #56636A; --line: #C6CED2; --line-strong: #8C989E;
+  --focus: #1D6E85; --on-fill: #0F171A; --grid: rgba(25, 33, 37, .07);
+  /* Clock domains: fill / outline+arrow ink / container tint */
+  --io: #8BCFE0;   --io-ink: #1D6E85;   --io-tint: #E0F0F5;
+  --core: #BCA8DF; --core-ink: #563C92; --core-tint: #ECE6F6;
+  --k50: #BAD480;  --k50-ink: #4F6E1C;  --k50-tint: #EBF2DB;
+  --sram: #E9A09A; --sram-ink: #9C382F; --sram-tint: #F8E4E1;
+  --ext: #FFFFFF;  --ext-ink: #343D42;  --ext-tint: #F2F4F5;
+  --x: #D2D8DB;    --x-ink: #55606A;    --x-tint: #ECEFF0;
+  --fpga: #FAFBFB; --fpga-ink: #232B2F;
+  --pwr: #C98410; --pwr-ink: #8E5900; --pwr-tint: #FBF0DA;
+  --shadow: 0 1px 2px rgba(20, 30, 35, .08), 0 6px 18px rgba(20, 30, 35, .08);
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-cond: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101517; --surface: #182024; --surface-2: #141B1E;
+    --ink: #E4EAEC; --muted: #97A4AA; --line: #2E393E; --line-strong: #56646B;
+    --focus: #8FD3E6; --on-fill: #F2F6F7; --grid: rgba(228, 234, 236, .05);
+    --io: #2A6A7C;   --io-ink: #8CD0E3;   --io-tint: #132A31;
+    --core: #594787; --core-ink: #C7B5EE; --core-tint: #211B30;
+    --k50: #56702A;  --k50-ink: #BED88A;  --k50-tint: #1A2414;
+    --sram: #88403A; --sram-ink: #EFA59D; --sram-tint: #2D1918;
+    --ext: #1F272B;  --ext-ink: #C3CDD2;  --ext-tint: #1A2125;
+    --x: #3A444A;    --x-ink: #A9B5BB;    --x-tint: #1C2327;
+    --fpga: #12191C; --fpga-ink: #B9C4C9;
+    --pwr: #E3A33A; --pwr-ink: #F0BC62; --pwr-tint: #2C2210;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101517; --surface: #182024; --surface-2: #141B1E;
+  --ink: #E4EAEC; --muted: #97A4AA; --line: #2E393E; --line-strong: #56646B;
+  --focus: #8FD3E6; --on-fill: #F2F6F7; --grid: rgba(228, 234, 236, .05);
+  --io: #2A6A7C;   --io-ink: #8CD0E3;   --io-tint: #132A31;
+  --core: #594787; --core-ink: #C7B5EE; --core-tint: #211B30;
+  --k50: #56702A;  --k50-ink: #BED88A;  --k50-tint: #1A2414;
+  --sram: #88403A; --sram-ink: #EFA59D; --sram-tint: #2D1918;
+  --ext: #1F272B;  --ext-ink: #C3CDD2;  --ext-tint: #1A2125;
+  --x: #3A444A;    --x-ink: #A9B5BB;    --x-tint: #1C2327;
+  --fpga: #12191C; --fpga-ink: #B9C4C9;
+  --pwr: #E3A33A; --pwr-ink: #F0BC62; --pwr-tint: #2C2210;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .3);
+  color-scheme: dark;
+}
+
+html { height: 100%; box-sizing: border-box; }
+body { height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font-ui); }
+*, *::before, *::after { box-sizing: border-box; }
+
+.app {
+  height: 100%; display: flex; flex-direction: column; gap: 10px;
+  padding-block: 14px 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--bg);
+}
+.app:fullscreen { padding: 14px 18px; }
+
+.bar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; }
+.ident { min-width: 0; }
+h1 { margin: 0; font: 600 21px/1.15 var(--font-ui); letter-spacing: -.01em; text-wrap: balance; }
+h1 span { font-weight: 400; color: var(--muted); }
+.sub { margin: 3px 0 0; font: 400 13px/1.35 var(--font-cond); color: var(--muted); }
+.sub code { font: 500 12px var(--font-mono); color: var(--ink); }
+
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; border-right: 1px solid var(--line); background: transparent; color: var(--ink);
+  padding: 6px 11px; font: 500 12.5px var(--font-ui); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button:hover { background: var(--surface-2); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.tog { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface); font: 500 12.5px var(--font-ui); cursor: pointer; user-select: none; }
+.tog input { margin: 0; accent-color: var(--ink); }
+.tool { display: inline-flex; gap: 4px; }
+.tool button { min-width: 32px; height: 30px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  color: var(--ink); font: 500 12.5px var(--font-ui); cursor: pointer; }
+.tool button:hover, .tog:hover { border-color: var(--line-strong); }
+button:focus-visible, .tog:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 26px; font: 400 12.5px var(--font-cond); }
+.lg-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+.lg-h { font: 600 10.5px var(--font-cond); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.lg-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.dom { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 4px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.dom:hover { border-color: var(--line-strong); }
+.dom b { font: 600 11.5px var(--font-mono); }
+.dom span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.dom[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.sw { display: inline-block; width: 15px; height: 15px; border: 1.5px solid; border-radius: 3px; }
+.sw.split { background: linear-gradient(90deg, var(--io) 50%, var(--k50) 50%); border-color: var(--x-ink); }
+.lg-item svg { flex: none; overflow: visible; }
+
+.stage { position: relative; flex: 1 1 auto; min-height: 380px; overflow: hidden; border: 1px solid var(--line); border-radius: 8px;
+  background-color: var(--surface-2); background-image: radial-gradient(var(--grid) 1px, transparent 1.3px); background-size: 20px 20px; }
+#dia { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; cursor: grab; }
+#dia.panning { cursor: grabbing; }
+.status { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); padding: 4px 11px; border: 1px solid var(--line);
+  border-radius: 999px; background: var(--surface); color: var(--muted); font: 500 12px var(--font-ui); box-shadow: var(--shadow); }
+.hint { position: absolute; left: 10px; bottom: 8px; margin: 0; padding: 2px 7px; border-radius: 4px; pointer-events: none;
+  background: color-mix(in srgb, var(--surface-2) 85%, transparent); color: var(--muted); font: 400 11.5px var(--font-cond); }
+
+.tip { position: absolute; z-index: 5; width: max-content; max-width: min(330px, calc(100% - 20px)); padding: 9px 12px 10px; pointer-events: none;
+  border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); box-shadow: var(--shadow);
+  font: 400 12.5px/1.42 var(--font-ui); color: var(--ink); }
+.tip h4 { margin: 0; font: 600 13px var(--font-mono); overflow-wrap: anywhere; }
+.tip h4.dev { font-family: var(--font-ui); }
+.tip h4 .inst { font-weight: 500; color: var(--muted); }
+.tip .kind { margin-top: 1px; font: 500 11.5px var(--font-cond); color: var(--muted); }
+.tip p { margin: 6px 0 0; }
+.tip .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.tip .chip { padding: 1px 6px; border: 1px solid; border-radius: 3px; font: 600 10.5px var(--font-mono); color: var(--on-fill); }
+.tip .file { margin-top: 7px; font: 500 11px var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+.tip .act { margin-top: 6px; font: 500 11.5px var(--font-cond); color: var(--focus); }
+.tip ul { margin: 5px 0 0; padding-left: 16px; }
+
+/* SVG diagram */
+.t-mod { font: 600 12px var(--font-mono); }
+.t-dev { font: 600 12.5px var(--font-ui); }
+.t-hdr { font: 600 12px var(--font-mono); }
+.t-fpga { font: 600 15px var(--font-ui); letter-spacing: .02em; }
+.t-cap { font: 400 11px var(--font-cond); }
+.t-tag { font: 600 8.5px var(--font-cond); letter-spacing: .07em; }
+.t-lab { font: 500 10.5px var(--font-cond); }
+.t-pll { font: 600 11.5px var(--font-mono); }
+.node .main { stroke-width: 1.2; }
+.node.collapsible { cursor: pointer; }
+.node.collapsible:not(.open):hover .main { stroke-width: 2.2; }
+.node.open .hdr-hit { cursor: pointer; }
+.node.open:hover .frame { stroke-width: 1.8; }
+.node:focus { outline: none; }
+.node:focus-visible .main, .node:focus-visible .frame { stroke: var(--focus) !important; stroke-width: 2.6; }
+.node.unused { opacity: .5; }
+.btn-c rect { fill: var(--surface); stroke: var(--line-strong); }
+.btn-c path, .badge path { stroke: var(--ink); stroke-width: 1.5; fill: none; }
+.badge rect { fill: var(--surface); stroke: var(--line-strong); }
+.band-o, .band-f { fill: none; stroke-linejoin: miter; stroke-linecap: butt; }
+.band-o { stroke-width: 10.6; }
+.band-f { stroke-width: 8; }
+.sig-l { fill: none; stroke-width: 1.5; stroke-linejoin: round; }
+.clk-l { fill: none; stroke-width: 1.4; stroke-dasharray: 5 3; }
+.pwr-l { fill: none; stroke-width: 2.8; stroke-linejoin: round; }
+.btn-sym { fill: none; stroke-width: 1.6; stroke-linecap: round; }
+.edge .hit { fill: none; stroke: transparent; stroke-width: 14; }
+.edge.unused { opacity: .45; }
+.edge.unused .sig-l { stroke-dasharray: 4 3; }
+.dim { opacity: .13 !important; }
+@media (max-width: 640px) {
+  h1 { font-size: 18px; }
+  .seg button { padding: 6px 8px; font-size: 12px; }
+  .hint { display: none; }
+}
+</style>
+
+<div class="app" id="app">
+  <header class="bar">
+    <div class="ident">
+      <h1>CAIN FPGA <span>block diagram</span></h1>
+      <p class="sub"><code>cain_top</code> on an Efinix Trion T20Q100F3 · one 50 MHz oscillator, two PLLs, four clock domains</p>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Detail level">
+        <button type="button" id="lvl-b" data-level="-1" title="FPGA as a black box with the board around it (key 0)">Board</button>
+        <button type="button" id="lvl-0" data-level="0" title="Top-level modules only (key 1)">Top level</button>
+        <button type="button" id="lvl-1" data-level="1" title="Open Ethernet, DSP and console (key 2)">Subsystems</button>
+        <button type="button" id="lvl-2" data-level="2" title="Open the UDP stack, RMII and packet switch (key 3)">Datapath</button>
+        <button type="button" id="lvl-3" data-level="3" title="Open everything down to RAMs and synchronizers (key 4)">Primitives</button>
+      </div>
+      <label class="tog"><input type="checkbox" id="opt-labels"> Stream labels</label>
+      <label class="tog"><input type="checkbox" id="opt-unused" checked> Unused RX path</label>
+      <div class="tool">
+        <button type="button" id="z-out" aria-label="Zoom out">−</button>
+        <button type="button" id="z-fit" title="Fit to screen (key F)">Fit</button>
+        <button type="button" id="z-in" aria-label="Zoom in">+</button>
+        <button type="button" id="z-full">Fullscreen</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="legend" aria-label="Legend">
+    <div class="lg-group">
+      <span class="lg-h">Clock domains</span>
+      <button type="button" class="dom" id="dom-io" data-dom="io" aria-pressed="false" title="Highlight clk_io"><i class="sw" style="background:var(--io);border-color:var(--io-ink)"></i><b>clk_io</b><span>73.571 MHz</span></button>
+      <button type="button" class="dom" id="dom-core" data-dom="core" aria-pressed="false" title="Highlight clk_core"><i class="sw" style="background:var(--core);border-color:var(--core-ink)"></i><b>clk_core</b><span>125 MHz</span></button>
+      <button type="button" class="dom" id="dom-k50" data-dom="k50" aria-pressed="false" title="Highlight clk_50"><i class="sw" style="background:var(--k50);border-color:var(--k50-ink)"></i><b>clk_50</b><span>50 MHz</span></button>
+      <button type="button" class="dom" id="dom-sram" data-dom="sram" aria-pressed="false" title="Highlight clk_sram"><i class="sw" style="background:var(--sram);border-color:var(--sram-ink)"></i><b>clk_sram</b><span>100 MHz</span></button>
+      <span class="lg-item"><i class="sw split"></i>crosses domains</span>
+      <span class="lg-item"><i class="sw" style="background:var(--ext);border-color:var(--ext-ink)"></i>off-chip</span>
+    </div>
+    <div class="lg-group">
+      <span class="lg-h">Interfaces</span>
+      <span class="lg-item"><svg width="40" height="16" aria-hidden="true"><path d="M2 8H27" style="stroke:var(--x-ink);stroke-width:10.6;fill:none"/><polygon points="38,8 27,16.5 27,-0.5" style="fill:var(--x);stroke:var(--x-ink);stroke-width:1.3;stroke-linejoin:miter"/><path d="M2 8H29" style="stroke:var(--x);stroke-width:8;fill:none"/></svg>AXI-Stream</span>
+      <span class="lg-item"><svg width="44" height="16" aria-hidden="true"><path d="M13 8H31" style="stroke:var(--x-ink);stroke-width:10.6;fill:none"/><polygon points="2,8 13,16.5 13,-0.5" style="fill:var(--x);stroke:var(--x-ink);stroke-width:1.3"/><polygon points="42,8 31,16.5 31,-0.5" style="fill:var(--x);stroke:var(--x-ink);stroke-width:1.3"/><path d="M11 8H33" style="stroke:var(--x);stroke-width:8;fill:none"/></svg>APB</span>
+      <span class="lg-item"><svg width="40" height="16" aria-hidden="true"><path d="M2 8H32" style="stroke:var(--x-ink);stroke-width:1.5;fill:none"/><polygon points="38,8 31,11.6 31,4.4" style="fill:var(--x-ink)"/></svg>other signals, labelled</span>
+      <span class="lg-item"><svg width="40" height="16" aria-hidden="true"><path d="M2 8H32" style="stroke:var(--x-ink);stroke-width:1.4;stroke-dasharray:5 3;fill:none"/><polygon points="38,8 31,11.6 31,4.4" style="fill:var(--x-ink)"/></svg>reference clock</span>
+      <span class="lg-item"><svg width="40" height="16" aria-hidden="true"><path d="M2 8H31" style="stroke:var(--pwr);stroke-width:2.8;fill:none"/><polygon points="38,8 30,12.2 30,3.8" style="fill:var(--pwr)"/></svg>power rail</span>
+    </div>
+    <div class="lg-group">
+      <span class="lg-h">Blocks</span>
+      <span class="lg-item"><svg width="22" height="14" aria-hidden="true"><rect x=".6" y=".6" width="20.8" height="12.8" rx="2" style="fill:var(--x);stroke:var(--x-ink);stroke-width:1.2"/></svg>RTL module</span>
+      <span class="lg-item"><svg width="22" height="14" aria-hidden="true"><rect x=".6" y=".6" width="20.8" height="12.8" rx="2" style="fill:var(--x-tint);stroke:var(--x-ink);stroke-width:1.2;stroke-dasharray:4 3"/></svg>logic inside a module</span>
+      <span class="lg-item"><svg width="22" height="14" aria-hidden="true"><rect x=".6" y=".6" width="20.8" height="12.8" rx="2" style="fill:var(--x);stroke:var(--x-ink);stroke-width:1.2;opacity:.5;stroke-dasharray:4 3"/></svg>commented out</span>
+      <span class="lg-item"><svg width="16" height="16" aria-hidden="true"><rect x=".6" y=".6" width="14.8" height="14.8" rx="3" style="fill:var(--surface);stroke:var(--line-strong)"/><path d="M4.5 8h7M8 4.5v7" style="stroke:var(--ink);stroke-width:1.5"/></svg>has internals</span>
+    </div>
+  </section>
+
+  <main class="stage" id="stage">
+    <svg id="dia" role="img" aria-label="Interactive block diagram of the CAIN FPGA design">
+      <defs id="defs"></defs>
+      <g id="vp">
+        <g id="layer-boxes"></g>
+        <g id="layer-edges"></g>
+        <g id="layer-nodes"></g>
+      </g>
+    </svg>
+    <div class="status" id="status">Loading layout engine…</div>
+    <p class="hint">Click a block to open it · click a frame's title bar to close it · the magnifier zooms to a frame · drag to pan · scroll to zoom · F fits</p>
+    <div class="tip" id="tip" hidden></div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
+<script>
+(() => {
+'use strict';
+
+// ---------------------------------------------------------------------------
+// Design data, from src/ (cain_top.sv and below), the PLL setup in
+// CAIN_project.peri.xml and constraints.sdc.
+// clk: 'io' | 'core' | 'k50' | 'sram' | 'ext' (off-chip) | 'x' (asynchronous)
+//      [a, b]            block crosses from domain a (left) to b (right)
+//      {main, in, out}   main domain, with side strips for the domains on its inputs/outputs
+// ---------------------------------------------------------------------------
+const DOMS = {
+  io:   { name: 'clk_io',   freq: '73.571 MHz', src: 'PLL_TL1 ÷7' },
+  core: { name: 'clk_core', freq: '125 MHz',    src: 'PLL_TL0 ÷4' },
+  k50:  { name: 'clk_50',   freq: '50 MHz',     src: 'PLL_TL0 ÷10' },
+  sram: { name: 'clk_sram', freq: '100 MHz',    src: 'PLL_TL0 ÷5' },
+  ext:  { name: 'off-chip' },
+  x:    { name: 'asynchronous' },
+};
+
+const MODFILE = {
+  reset_sync: 'src/reset_sync.sv', ff_sync: 'src/cdc/ff_sync.sv', led_cube: 'src/led_cube.sv', i2s: 'src/audio/i2s.sv',
+  axis_tid_reorder: 'src/infrastructure/axis_tid_reorder.sv', axis_tid_broadcast: 'src/infrastructure/axis_tid_broadcast.sv',
+  adc: 'src/adc/adc.sv', uart_controller: 'src/uart/uart_controller.sv', uart: 'src/uart/uart.sv', uart_rx: 'src/uart/uart_rx.sv',
+  uart_tx: 'src/uart/uart_tx.sv', axis_switch: 'src/infrastructure/axis_switch.sv', apb_splitter: 'src/infrastructure/apb_splitter.sv',
+  apb_width_conv: 'src/infrastructure/apb_width_conv.sv', apb_cdc: 'src/cdc/apb_cdc.sv', eth_smi: 'src/ethernet/eth_smi.sv',
+  axis_tid_cdc_fifo: 'src/cdc/axis_tid_cdc_fifo.sv', axis_cdc_fifo: 'src/cdc/axis_cdc_fifo.sv',
+  simple_dual_port_bram: 'src/cdc/simple_dual_port_bram.sv', rom: 'src/ram/rom.sv',
+  axis_tid_register_slice: 'src/infrastructure/axis_register_slice.sv', axis_register_slice_core: 'src/infrastructure/axis_register_slice.sv',
+  tdoa_direction_finder: 'src/dsp/tdoa_direction_finder.sv', mixer: 'src/dsp/building_blocks/mixer.sv',
+  fir_decimator: 'src/dsp/building_blocks/fir_decimator.sv', cross_correlator: 'src/dsp/building_blocks/cross_correlator.sv',
+  peak_finder: 'src/dsp/building_blocks/peak_finder.sv', direction_estimator: 'src/dsp/building_blocks/direction_estimator.sv',
+  moving_average_filter: 'src/dsp/building_blocks/moving_average_filter.sv', ethernet: 'src/ethernet/ethernet.sv',
+  axis_tid_serializer: 'src/infrastructure/axis_tid_serializer.sv', rtp_packetizer: 'src/ethernet/packetization/rtp_packetizer.sv',
+  axis_packet_switch: 'src/infrastructure/axis_packet_switch.sv', axis_packet_fifo: 'src/infrastructure/axis_packet_fifo.sv',
+  udp_stack: 'src/ethernet/packetization/udp_stack.sv', udp_packetizer: 'src/ethernet/packetization/udp_packetizer.sv',
+  ipv4_packetizer: 'src/ethernet/packetization/ipv4_packetizer.sv', eth_packetizer: 'src/ethernet/packetization/eth_packetizer.sv',
+  eth_depacketizer: 'src/ethernet/packetization/eth_depacketizer.sv', ipv4_depacketizer: 'src/ethernet/packetization/ipv4_depacketizer.sv',
+  udp_depacketizer: 'src/ethernet/packetization/udp_depacketizer.sv', udp_stack_regs: 'src/ethernet/packetization/udp_stack_regs.sv',
+  rmii: 'src/ethernet/rmii.sv', rmii_tx: 'src/ethernet/rmii_tx.sv', rmii_rx: 'src/ethernet/rmii_rx.sv', sram_controller: 'src/sram/sram_controller.sv',
+};
+
+const E = (s, t, type, clk, label = '', o = {}) => ({ s, t, type, clk, label, ...o });
+
+function cdcFifo(key, inst, a, b, depth) {
+  return {
+    key, mod: 'axis_tid_cdc_fifo', inst, clk: [a, b], lvl: 3, cap: `${depth}-entry async FIFO`,
+    desc: `Crosses the sample stream from ${DOMS[a].name} to ${DOMS[b].name}. Packs {tid, data} into one word for the FIFO underneath.`,
+    children: [{
+      key: 'f', mod: 'axis_cdc_fifo', inst: 'axis_cdc_fifo_i', clk: [a, b], lvl: 3, cap: 'Gray-coded pointers',
+      desc: 'Dual-clock FIFO. Only the Gray-coded pointers cross, each through a two-flop synchronizer; the data waits in a RAM with a write port on one clock and a read port on the other.',
+      children: [
+        { key: 'wr', kind: 'logic', title: 'write side', cap: 'wr pointer · full', clk: a },
+        { key: 'sw', kind: 'sync', mod: 'ff_sync', inst: 'ff_sync_wr_pointer', clk: [a, b], cap: 'wr ptr →', tag: '2FF' },
+        { key: 'ram', kind: 'mem', mod: 'simple_dual_port_bram', inst: 'simple_dual_port_bram_i', clk: [a, b], cap: `${depth} × {tid, data}`, tag: 'RAM' },
+        { key: 'sr', kind: 'sync', mod: 'ff_sync', inst: 'ff_sync_rd_pointer', clk: [a, b], cap: '← rd ptr', tag: '2FF' },
+        { key: 'rd', kind: 'logic', title: 'read side', cap: 'rd pointer · empty', clk: b },
+      ],
+    }],
+  };
+}
+const cdcEdges = (P, a, b) => [
+  E(`${P}.f.wr`, `${P}.f.ram`, 'sig', a, 'write'),
+  E(`${P}.f.ram`, `${P}.f.rd`, 'sig', b, 'read'),
+  E(`${P}.f.wr`, `${P}.f.sw`, 'sig', a, 'wr ptr'),
+  E(`${P}.f.sw`, `${P}.f.rd`, 'sig', b),
+  E(`${P}.f.rd`, `${P}.f.sr`, 'sig', b, 'rd ptr', { rev: true }),
+  E(`${P}.f.sr`, `${P}.f.wr`, 'sig', a, '', { rev: true }),
+];
+
+function apbCdc(key, inst, cap) {
+  return {
+    key, mod: 'apb_cdc', inst, clk: ['io', 'k50'], lvl: 3, cap,
+    desc: 'APB bridge from clk_io to clk_50. Each transfer crosses with a toggle handshake; only the two toggles go through synchronizers. Adds about 3 + 3 cycles of latency.',
+    children: [
+      { key: 'a', kind: 'logic', title: 'clk_io side', cap: 'request regs · pready', clk: 'io' },
+      { key: 'sq', kind: 'sync', mod: 'ff_sync', inst: 'ff_sync_req', clk: ['io', 'k50'], cap: 'req_tgl →', tag: '2FF' },
+      { key: 'sa', kind: 'sync', mod: 'ff_sync', inst: 'ff_sync_ack', clk: ['io', 'k50'], cap: '← ack_tgl', tag: '2FF' },
+      { key: 'b', kind: 'logic', title: 'clk_50 side', cap: 'APB master · response regs', clk: 'k50' },
+    ],
+  };
+}
+const apbCdcEdges = P => [
+  E(`${P}.a`, `${P}.sq`, 'sig', 'io', 'req_tgl'),
+  E(`${P}.sq`, `${P}.b`, 'sig', 'k50'),
+  E(`${P}.b`, `${P}.sa`, 'sig', 'k50', 'ack_tgl', { rev: true }),
+  E(`${P}.sa`, `${P}.a`, 'sig', 'io', '', { rev: true }),
+  E(`${P}.a`, `${P}.b`, 'sig', 'x', 'req / resp regs', { dir: 'both', detail: 'Held still while the toggles cross, so they need no synchronizer (false paths for timing).' }),
+];
+
+function pktFifo(key, inst, size) {
+  return {
+    key, mod: 'axis_packet_fifo', inst, clk: 'k50', lvl: 3, cap: `${size} store-and-forward`,
+    desc: 'A packet only comes out once all of it is in, then leaves without gaps.',
+    children: [
+      { key: 'ctl', kind: 'logic', title: 'pointers', cap: 'write · commit · read', clk: 'k50' },
+      { key: 'ram', kind: 'mem', mod: 'simple_dual_port_bram', inst: 'simple_dual_port_bram_i', clk: 'k50', cap: size, tag: 'RAM' },
+    ],
+  };
+}
+
+function regSlice(key, inst, cap, clk, desc) {
+  return {
+    key, mod: 'axis_tid_register_slice', inst, clk, lvl: 3, cap, desc,
+    children: [{ key: 'core', mod: 'axis_register_slice_core', inst: 'core_i', clk, cap }],
+  };
+}
+
+const TREE = [
+  { key: 'osc', kind: 'ext', title: '50 MHz oscillator', cap: 'off-board · clocks FPGA and PHY', clk: 'ext',
+    desc: 'The only clock source. Drives both PLLs through the pll_clkin pin (GPIOL_74) and the LAN8720A as its RMII REF_CLK.' },
+  { key: 'power', kind: 'group', title: 'Power supply', cap: 'USB powered', clk: 'ext', children: [
+    { key: 'usb', kind: 'ext', title: 'USB 5 V', cap: 'VBUS from the host', clk: 'ext',
+      desc: 'The board runs from USB bus power.' },
+    { key: 'buck', kind: 'ext', title: '1.2 V buck', cap: 'switching · 5 V → 1.2 V', clk: 'ext',
+      desc: 'Switching regulator for the FPGA core rail. It also enables the 3.3 V regulator, so the 1.2 V rail comes up first.' },
+    { key: 'ldo', kind: 'ext', title: '3.3 V LDO', cap: 'linear · 5 V → 3.3 V', clk: 'ext',
+      desc: 'Linear regulator for the FPGA I/O rail, switched on by the 1.2 V regulator.' },
+  ] },
+  { key: 'rstpin', kind: 'button', title: 'RESET', cap: 'push button → rst_in_n', clk: 'ext',
+    desc: 'Push button on the rst_in_n pin (active low). Pressing it resets every clock domain through reset_sync.' },
+  { key: 'mics', kind: 'ext', title: '8× INMP441', cap: 'I²S MEMS mics · 2 per SD line', clk: 'ext',
+    desc: 'Eight MEMS microphones sharing SCK and WS, two per data line (left and right slots).' },
+  { key: 'adcchip', kind: 'ext', title: 'ADC088S022', cap: '8-channel 8-bit SPI ADC', clk: 'ext',
+    desc: 'Eight-channel 8-bit ADC. The FPGA picks the next channel on MOSI during each conversion.' },
+  { key: 'fpga', kind: 'fpga', lvl: 0, title: 'FPGA', cap: 'Efinix Trion T20Q100F3 · cain_top', clk: 'x',
+    desc: 'The CAIN design (cain_top) with the two PLLs, the configuration logic and the in-package flash. Open it to see the modules inside.', children: [
+    { key: 'flash', kind: 'hard', title: 'SPI flash', cap: 'in package · bitstream', clk: 'x',
+      desc: 'Configuration flash inside the FPGA package. The FT4232H writes it over SPI; the FPGA loads its bitstream from it.' },
+    { key: 'cfg', kind: 'hard', title: 'JTAG / configuration', cap: 'hard block · loads the bitstream', clk: 'x',
+      desc: 'The FPGA’s configuration logic. Programmed directly over JTAG, or from the SPI flash.' },
+    { key: 'bbtie', kind: 'logic', title: 'bit-bang tie-off', cap: 'bb_OUT = bb_OE = 0', clk: 'x', idle: true,
+      desc: 'The FT4232H bit-bang port is unused: cain_top drives bb_OUT and bb_OE low and ignores bb_IN.' },
+    { key: 'pll0', kind: 'pll', title: 'PLL_TL0', cap: 'pll_inst1 · M 20 · N 1 · O 2', clk: 'x',
+      outs: [['k50', 'clk_50', '÷10', '50 MHz'], ['core', 'clk_core', '÷4', '125 MHz'], ['sram', 'clk_sram', '÷5', '100 MHz']],
+      desc: '50 MHz in from the oscillator. clk_50 is the in-phase output (internal feedback), so the RMII timing can be referenced to the oscillator edge.' },
+    { key: 'pll1', kind: 'pll', title: 'PLL_TL1', cap: 'pll_inst2 · M 103 · N 5 · O 2', clk: 'x',
+      outs: [['io', 'clk_io', '÷7', '73.571 MHz']],
+      desc: 'Separate PLL for the IO clock. 73.571 MHz divides down to the I²S, SPI and UART bit rates.' },
+    { key: 'rst', mod: 'reset_sync', inst: 'reset_sync_i', lvl: 3, clk: { main: 'x', out: ['k50', 'core', 'sram', 'io'] },
+      cap: 'one synchronizer per domain',
+      desc: 'Holds every domain in reset until rst_in_n is high and both PLLs are locked, then releases each domain on its own clock. Outputs rstn_50, rstn_core, rstn_sram, rstn_io (not drawn).',
+      children: [
+        { key: 'and', kind: 'logic', title: 'reset ∧ locked', cap: 'rst_in_n ∧ both PLLs locked', clk: 'x' },
+        { key: 's50', kind: 'sync', mod: 'ff_sync', inst: 'gen_rst_sync[0]', clk: 'k50', cap: '→ rstn_50', tag: '2FF' },
+        { key: 'score', kind: 'sync', mod: 'ff_sync', inst: 'gen_rst_sync[1]', clk: 'core', cap: '→ rstn_core', tag: '2FF' },
+        { key: 'ssram', kind: 'sync', mod: 'ff_sync', inst: 'gen_rst_sync[2]', clk: 'sram', cap: '→ rstn_sram', tag: '2FF' },
+        { key: 'sio', kind: 'sync', mod: 'ff_sync', inst: 'gen_rst_sync[3]', clk: 'io', cap: '→ rstn_io', tag: '2FF' },
+      ] },
+    { key: 'uart', mod: 'uart_controller', inst: 'uart_controller_i', lvl: 1, clk: 'io', cap: 'serial console · APB master',
+      desc: 'Register console. "r <sel> <addr>" and "w <sel> <addr> <data>" become APB transfers; replies come back in hex, or OK / ERR.',
+      children: [
+        { key: 'phy', mod: 'uart', inst: 'uart_i', lvl: 2, clk: 'io', cap: '115200 baud',
+          desc: 'UART with registered pins, built from a receiver and a transmitter.', children: [
+            { key: 'rx', mod: 'uart_rx', inst: 'uart_rx_i', lvl: 3, clk: 'io', cap: 'serial → byte', children: [
+              { key: 'sync', kind: 'sync', mod: 'ff_sync', inst: 'rx_sync', clk: 'io', cap: 'rx pin', tag: '2FF' },
+              { key: 'fsm', kind: 'logic', title: 'receiver', cap: 'start bit · bit timing', clk: 'io' },
+            ] },
+            { key: 'tx', mod: 'uart_tx', inst: 'uart_tx_i', clk: 'io', cap: 'byte → serial' },
+          ] },
+        { key: 'con', kind: 'logic', title: 'console FSM', cap: 'parse r / w · run APB transfer', clk: 'io',
+          desc: 'Parses characters as they arrive (no line buffer), runs the APB transfer, then prints the reply. Gives up on a peripheral after 16384 cycles.' },
+        { key: 'sw', mod: 'axis_switch', inst: 'uart_tx_switch', clk: 'io', cap: 'echo + replies → TX',
+          desc: 'Merges the character echo and the command replies onto the transmitter.' },
+      ] },
+    { key: 'apbsplit', mod: 'apb_splitter', inst: 'apb_splitter_i', clk: 'io', cap: '1 master → 2 peripherals',
+      desc: 'One psel line per peripheral (0: Ethernet SMI, 1: UDP registers). Muxes the selected peripheral’s response back. Combinational.' },
+    { key: 'wconv', mod: 'apb_width_conv', inst: 'eth_smi_apb_width_conv', clk: 'io', cap: '32 → 16-bit data · 8 → 5-bit addr',
+      desc: 'Combinational. A transfer whose address or data would lose set bits is refused with PSLVERR.' },
+    apbCdc('smicdc', 'eth_smi_apb_cdc', 'SMI bus → clk_50'),
+    apbCdc('udpcdc', 'udp_apb_cdc', 'UDP registers → clk_50'),
+    { key: 'smi', mod: 'eth_smi', inst: 'eth_smi_i', clk: 'k50', cap: 'MDIO master · MDC 500 kHz',
+      desc: 'Turns each APB transfer into an SMI read or write frame to PHY address 1.' },
+    { key: 'i2s', mod: 'i2s', inst: 'i2s_i', clk: 'io', cap: 'SCK 3.07 MHz · 47.9 kS/s · 18-bit',
+      desc: 'I²S master for the 8 mics. SCK = clk_io ÷ 24, WS = SCK ÷ 64. Keeps the top 18 bits of each 24-bit word. Channels come out as 0 2 4 6 1 3 5 7.' },
+    { key: 'reorder', mod: 'axis_tid_reorder', inst: 'i2s_reorder', clk: 'io', cap: '0 2 4 6 1 3 5 7 → 0 … 7',
+      desc: 'Holds one sample per channel and releases them in channel order.' },
+    { key: 'bcast', mod: 'axis_tid_broadcast', inst: 'i2s_broadcast', clk: 'io', cap: '1 stream → 2 copies',
+      desc: 'Hands each beat to the DSP core and to Ethernet at once; the slower one sets the pace. Combinational.' },
+    cdcFifo('i2scdc', 'axis_tid_cdc_fifo_i2s_data', 'io', 'core', 8),
+    regSlice('coreslice', 'i2s_core_reg_slice', '2 skid-buffer stages', 'core', 'Two registered stages between the CDC FIFO and the DSP core, for timing at 125 MHz.'),
+    { key: 'tdoa', mod: 'tdoa_direction_finder', inst: 'tdoa_direction_finder_i', lvl: 1, clk: 'core', cap: 'TDOA direction finder',
+      desc: 'Mix to baseband → decimate by 4 → cross-correlate all 28 mic pairs → peak lag per pair → least-squares direction → moving average.',
+      children: [
+        { key: 'mixer', mod: 'mixer', inst: 'mixer_i', lvl: 3, clk: 'core', cap: '5 kHz → DC · real → {I, Q}',
+          desc: 'Multiplies each channel by its own LO phase, so channels sampled together share a phase. Two multipliers for all channels.', children: [
+            { key: 'dp', kind: 'logic', title: 'mixer datapath', cap: 'phase per channel · 2 multipliers', clk: 'core' },
+            { key: 'lut', kind: 'mem', mod: 'rom', inst: 'lo_rom', clk: 'core', cap: '¼-wave cos / sin · 256 entries', tag: 'ROM' },
+          ] },
+        { key: 'decim', mod: 'fir_decimator', inst: 'decimator_i', lvl: 3, clk: 'core', cap: '512-tap FIR · ÷4',
+          desc: 'Complex FIR on a single multiplier; each channel is filtered on its own. Its output has no backpressure.', children: [
+            { key: 'dp', kind: 'logic', title: 'FIR MAC', cap: '1 multiplier · all channels', clk: 'core' },
+            { key: 'buf', kind: 'mem', mod: 'simple_dual_port_bram', inst: 'input_buffer', clk: 'core', cap: '8 ch × 512 complex samples', tag: 'RAM' },
+            { key: 'taps', kind: 'mem', mod: 'rom', inst: 'taps_rom', clk: 'core', cap: '512 taps · decimator_coef.hex', tag: 'ROM' },
+          ] },
+        { key: 'xcorr', mod: 'cross_correlator', inst: 'cross_correlator_i', lvl: 3, clk: 'core', cap: '28 pairs · ±10 lags · window 1024',
+          desc: 'Correlates every channel pair over the last 1024 samples, every 16 samples. Uses 5 complex MAC lanes (20 multipliers), the fewest that keep up at 125 MHz.', children: [
+            { key: 'dp', kind: 'logic', title: 'MAC lanes', cap: '5 complex lanes · 20 multipliers', clk: 'core' },
+            { key: 'ring', kind: 'mem', mod: 'simple_dual_port_bram', inst: 'g_buffer[c].ring', clk: 'core', cap: '1040 samples per channel', tag: 'RAM', count: 8 },
+          ] },
+        { key: 'peak', mod: 'peak_finder', inst: 'peak_finder_i', clk: 'core', cap: 'argmax re² + im² per pair',
+          desc: 'Exact magnitude on one 18×18 multiplier; outputs the index of the strongest lag for each pair.' },
+        { key: 'doa', mod: 'direction_estimator', inst: 'direction_finder_i', lvl: 3, clk: 'core', cap: 'least squares → {x, y, z}',
+          desc: 'direction = M · lags, with M = (c / fs) · pinv(A) worked out from the mic positions by gen_direction_matrix.py.', children: [
+            { key: 'dp', kind: 'logic', title: 'MAC', cap: '1 multiplier · 3 sums', clk: 'core' },
+            { key: 'rom', kind: 'mem', mod: 'rom', inst: 'coef_rom', clk: 'core', cap: 'M · direction_matrix.hex', tag: 'ROM' },
+          ] },
+        { key: 'mavg', mod: 'moving_average_filter', inst: 'moving_average_filter_i', lvl: 3, clk: 'core', cap: '256-point average · x, y, z',
+          desc: 'Running sum over the last 256 directions on each axis.', children: [
+            { key: 'dp', kind: 'logic', title: 'running sum', cap: '+ newest · − oldest', clk: 'core' },
+            { key: 'ram', kind: 'mem', mod: 'simple_dual_port_bram', inst: 'bram_i', clk: 'core', cap: '256-entry history', tag: 'RAM' },
+          ] },
+      ] },
+    { key: 'adc', mod: 'adc', inst: 'adc_i', clk: 'io', cap: 'SPI · 200 kS/s across 8 channels',
+      desc: 'SPI master at about 3.2 MHz, 16 SCK per conversion. Steps through channels 0 to 7 and tags each sample with its channel (tid).' },
+    { key: 'eth', mod: 'ethernet', inst: 'ethernet_i', lvl: 1, clk: { main: 'k50', in: ['io', 'core'] }, cap: '3 RTP streams over UDP',
+      desc: 'ADC samples, mic samples and direction estimates leave as three RTP streams (SSRC ADC0, MIC0, DIR0) to UDP port 5000.',
+      children: [
+        cdcFifo('adccdc', 'adc_cdc', 'io', 'k50', 16),
+        cdcFifo('miccdc', 'mic_cdc', 'io', 'k50', 16),
+        { key: 'dsplit', mod: 'axis_tid_serializer', inst: 'dir_split', clk: 'core', cap: '{x, y, z} → 3 beats',
+          desc: 'Splits each direction into three 16-bit beats tagged x, y, z, so the CDC FIFO is one component wide.' },
+        regSlice('dslice', 'dir_slice', '1 stage · registered ready', 'core', 'Registers tready so the FIFO’s full logic doesn’t reach back into the DSP clock’s logic.'),
+        cdcFifo('dircdc', 'dir_cdc', 'core', 'k50', 16),
+        { key: 'adcrtp', mod: 'rtp_packetizer', inst: 'adc_rtp', clk: 'k50', cap: 'ADC0 · PT 96 · 144 frames',
+          desc: '1164-byte RTP packets: 12-byte header and 144 frames of 8 one-byte samples (5.8 ms).' },
+        { key: 'micrtp', mod: 'rtp_packetizer', inst: 'mic_rtp', clk: 'k50', cap: 'MIC0 · PT 97 · 48 frames',
+          desc: '1164-byte RTP packets: 12-byte header and 48 frames of 8 three-byte samples (1.0 ms).' },
+        { key: 'dirrtp', mod: 'rtp_packetizer', inst: 'dir_rtp', clk: 'k50', cap: 'DIR0 · PT 98 · 1 frame',
+          desc: '18-byte RTP packets: one {x, y, z} direction each, to keep latency down.' },
+        { key: 'sw', mod: 'axis_packet_switch', inst: 'rtp_switch', lvl: 2, clk: 'k50', cap: 'whole packets · round robin',
+          desc: 'Buffers each stream and only starts a packet once all of it is in, so rmii_tx never runs dry mid-frame.', children: [
+            pktFifo('b0', 'g_in[0].packet_buffer', '2 KiB'),
+            pktFifo('b1', 'g_in[1].packet_buffer', '2 KiB'),
+            pktFifo('b2', 'g_in[2].packet_buffer', '32 B'),
+            { key: 'arb', kind: 'logic', title: 'arbiter', cap: 'round robin · out_sel', clk: 'k50' },
+          ] },
+        { key: 'lensel', kind: 'logic', title: 'length select', cap: 'out_sel → 1164 or 18 bytes', clk: 'k50',
+          desc: 'Picks the datagram length for the stream the switch is sending.' },
+        { key: 'regs', mod: 'udp_stack_regs', inst: 'udp_stack_regs_i', clk: 'k50', cap: 'MACs · IPs · ports · counters',
+          desc: 'APB registers: TX destination MAC/IP, local MAC/IP, TTL, ports, and TX/RX counters. Defaults send to broadcast on port 5000.' },
+        { key: 'udp', mod: 'udp_stack', inst: 'udp_stack_i', lvl: 2, clk: 'k50', cap: 'UDP / IPv4 / Ethernet framing',
+          desc: 'ETH_TX_BUFFER = 0, so there is no TX frame buffer: the packet switch already sends each packet without gaps.', children: [
+            { key: 'udpp', mod: 'udp_packetizer', inst: 'udp_packetizer_i', clk: 'k50', cap: '8-byte header · no checksum' },
+            { key: 'ipp', mod: 'ipv4_packetizer', inst: 'ipv4_packetizer_i', clk: 'k50', cap: '20-byte header · DF' },
+            { key: 'ethp', mod: 'eth_packetizer', inst: 'eth_packetizer_i', clk: 'k50', cap: 'MACs · padding · FCS' },
+            { key: 'ethd', mod: 'eth_depacketizer', inst: 'eth_depacketizer_i', clk: 'k50', cap: 'MAC filter · FCS check', unused: true },
+            { key: 'ipd', mod: 'ipv4_depacketizer', inst: 'ipv4_depacketizer_i', clk: 'k50', cap: 'IP filter', unused: true },
+            { key: 'udpd', mod: 'udp_depacketizer', inst: 'udp_depacketizer_i', clk: 'k50', cap: 'header + payload', unused: true },
+          ] },
+        { key: 'rmii', mod: 'rmii', inst: 'rmii_i', lvl: 2, clk: 'k50', cap: 'RMII MAC · 100 Mb/s', children: [
+          { key: 'tx', mod: 'rmii_tx', inst: 'rmii_tx_i', clk: 'k50', cap: 'adds preamble, SFD, IPG' },
+          { key: 'rx', mod: 'rmii_rx', inst: 'rmii_rx_i', clk: 'k50', cap: 'strips preamble, SFD' },
+        ] },
+      ] },
+    { key: 'led', mod: 'led_cube', inst: 'led_cube_i', clk: 'k50', cap: '1 kHz PWM · 4 s fade',
+      desc: 'Fades the user LED up and down with 1 kHz PWM.' },
+    { key: 'sramc', mod: 'sram_controller', inst: 'sram_controller_i', clk: 'sram', cap: 'QSPI · built, inputs tied off',
+      desc: 'Burst read/write controller for the QSPI SRAM. Instantiated, but nothing drives its request ports yet.' },
+  ] },
+  { key: 'ft', kind: 'ext', title: 'FT4232H', cap: 'USB · JTAG, SPI, UART, bit-bang', clk: 'ext',
+    desc: 'FTDI quad-channel USB bridge, all four channels used: JTAG to program the FPGA, SPI to write its configuration flash, the 115200-baud console UART, and an 8-bit bit-bang port.' },
+  { key: 'phychip', kind: 'ext', title: 'LAN8720A', cap: '100 Mb Ethernet PHY · REF_CLK in', clk: 'ext',
+    desc: 'RMII PHY on the same 50 MHz oscillator as the FPGA. Managed over SMI at PHY address 1.' },
+  { key: 'rj45', kind: 'ext', title: 'RJ45', cap: '100BASE-TX', clk: 'ext' },
+  { key: 'host', kind: 'ext', title: 'Host PC', cap: 'rtp_rx.py · serial console', clk: 'ext',
+    desc: 'Receives the three RTP streams (host/rtp_rx.py) and runs the register console over USB.' },
+  { key: 'rgb', kind: 'ext', title: 'RGB LED', cap: 'blue channel = user LED', clk: 'ext',
+    desc: 'Wired common-anode by mistake, so only the blue channel is driven; red and green are tied off.' },
+  { key: 'sram', kind: 'ext', title: 'QSPI SRAM', cap: 'external memory', clk: 'ext' },
+];
+
+// Edges run from data source to data sink. rev: lay out the other way (keeps return paths beside their forward
+// partners). bundle: edges merged into one labelled line when their ends collapse into the same pair of blocks.
+const EDGES = [
+  // Clocks and reset
+  E('osc', 'pll0', 'clock', 'x', '50 MHz', { detail: 'pll_clkin (GPIOL_74) → PLL reference' }),
+  E('osc', 'pll1', 'clock', 'x', '50 MHz', { detail: 'pll_clkin (GPIOL_74) → PLL reference' }),
+  E('osc', 'phychip', 'clock', 'x', 'REF_CLK 50 MHz', { detail: 'The PHY runs in REF_CLK In mode from the same oscillator.' }),
+  E('rstpin', 'rst.and', 'sig', 'ext', 'rst_in_n'),
+
+  // Power
+  E('power.usb', 'power.buck', 'power', 'pwr', '5 V'),
+  E('power.usb', 'power.ldo', 'power', 'pwr', '5 V'),
+  E('power.buck', 'power.ldo', 'sig', 'ext', 'EN', { detail: 'The 1.2 V regulator enables the 3.3 V regulator.' }),
+  E('power.buck', 'fpga', 'power', 'pwr', '1.2 V core'),
+  E('power.ldo', 'fpga', 'power', 'pwr', '3.3 V I/O'),
+
+  // FT4232H channels other than the UART
+  E('ft', 'cfg', 'sig', 'x', 'JTAG', { dir: 'both', detail: 'TCK, TMS, TDI → FPGA · TDO ← FPGA' }),
+  E('ft', 'flash', 'sig', 'x', 'SPI', { dir: 'both', detail: 'Writes the configuration flash' }),
+  E('flash', 'cfg', 'sig', 'x', 'bitstream', { detail: 'Read at power-up' }),
+  E('ft', 'bbtie', 'sig', 'ext', 'bit-bang', { dir: 'both', idle: true, detail: 'bb_IN[7:0], bb_OUT[7:0], bb_OE[7:0]: tied off' }),
+  E('pll0', 'rst.and', 'sig', 'x', 'clk_locked'),
+  E('pll1', 'rst.and', 'sig', 'x', 'clk_io_locked'),
+  E('rst.and', 'rst.s50', 'sig', 'k50'), E('rst.and', 'rst.score', 'sig', 'core'),
+  E('rst.and', 'rst.ssram', 'sig', 'sram'), E('rst.and', 'rst.sio', 'sig', 'io'),
+
+  // Microphones → DSP
+  E('mics', 'i2s', 'sig', 'io', 'I²S', { dir: 'both', detail: 'SCK, WS → mics · SD[3:0] ← mics' }),
+  E('i2s', 'reorder', 'axis', 'io', '8 ch × 18 b'),
+  E('reorder', 'bcast', 'axis', 'io', 'channel order'),
+  E('bcast', 'i2scdc.f.wr', 'axis', 'io', 'to DSP'),
+  E('bcast', 'eth.miccdc.f.wr', 'axis', 'io', 'to Ethernet'),
+  ...cdcEdges('i2scdc', 'io', 'core'),
+  E('i2scdc.f.rd', 'coreslice.core', 'axis', 'core'),
+  E('coreslice.core', 'tdoa.mixer.dp', 'axis', 'core', '47.9 kS/s per ch'),
+  E('tdoa.mixer.dp', 'tdoa.decim.dp', 'axis', 'core', '{I, Q}'),
+  E('tdoa.decim.dp', 'tdoa.xcorr.dp', 'axis', 'core', '12 kS/s per ch'),
+  E('tdoa.xcorr.dp', 'tdoa.peak', 'axis', 'core', '21 lags × 28 pairs'),
+  E('tdoa.peak', 'tdoa.doa.dp', 'axis', 'core', 'peak lag per pair'),
+  E('tdoa.doa.dp', 'tdoa.mavg.dp', 'axis', 'core', '{x, y, z}'),
+  E('tdoa.mavg.dp', 'eth.dsplit', 'axis', 'core', '{x, y, z} Q2.14'),
+  E('tdoa.mixer.dp', 'tdoa.mixer.lut', 'sig', 'core', 'LO cos / sin', { dir: 'both' }),
+  E('tdoa.decim.dp', 'tdoa.decim.buf', 'sig', 'core', 'sample history', { dir: 'both' }),
+  E('tdoa.decim.taps', 'tdoa.decim.dp', 'sig', 'core', 'taps'),
+  E('tdoa.xcorr.dp', 'tdoa.xcorr.ring', 'sig', 'core', 'window', { dir: 'both' }),
+  E('tdoa.doa.rom', 'tdoa.doa.dp', 'sig', 'core', 'coefficients'),
+  E('tdoa.mavg.dp', 'tdoa.mavg.ram', 'sig', 'core', 'oldest sample', { dir: 'both' }),
+
+  // ADC
+  E('adcchip', 'adc', 'sig', 'io', 'SPI', { dir: 'both', detail: 'SCK, MOSI, CS_n → ADC · MISO ← ADC' }),
+  E('adc', 'eth.adccdc.f.wr', 'axis', 'io', '8 ch × 8 b'),
+
+  // Console and APB
+  E('ft', 'uart.phy.rx.sync', 'sig', 'io', 'UART RX', { bundle: 'uart', bundleName: 'UART 115200' }),
+  E('uart.phy.tx', 'ft', 'sig', 'io', 'UART TX', { rev: true, bundle: 'uart', bundleName: 'UART 115200' }),
+  E('uart.phy.rx.sync', 'uart.phy.rx.fsm', 'sig', 'io'),
+  E('uart.phy.rx.fsm', 'uart.con', 'axis', 'io', 'characters'),
+  E('uart.con', 'uart.sw', 'axis', 'io', 'echo'),
+  E('uart.con', 'uart.sw', 'axis', 'io', 'reply'),
+  E('uart.sw', 'uart.phy.tx', 'axis', 'io'),
+  E('uart.con', 'apbsplit', 'apb', 'io', '32 b data · 8 b addr'),
+  E('apbsplit', 'wconv', 'apb', 'io', 'psel 0'),
+  E('wconv', 'smicdc.a', 'apb', 'io', '16 b data · 5 b addr'),
+  ...apbCdcEdges('smicdc'),
+  E('smicdc.b', 'smi', 'apb', 'k50'),
+  E('apbsplit', 'udpcdc.a', 'apb', 'io', 'psel 1'),
+  ...apbCdcEdges('udpcdc'),
+  E('udpcdc.b', 'eth.regs', 'apb', 'k50'),
+  E('smi', 'phychip', 'sig', 'k50', 'SMI', { dir: 'both', detail: 'MDC 500 kHz · MDIO (tri-state)' }),
+
+  // Ethernet
+  ...cdcEdges('eth.adccdc', 'io', 'k50'),
+  ...cdcEdges('eth.miccdc', 'io', 'k50'),
+  ...cdcEdges('eth.dircdc', 'core', 'k50'),
+  E('eth.adccdc.f.rd', 'eth.adcrtp', 'axis', 'k50'),
+  E('eth.miccdc.f.rd', 'eth.micrtp', 'axis', 'k50'),
+  E('eth.dsplit', 'eth.dslice.core', 'axis', 'core', 'x, y, z beats'),
+  E('eth.dslice.core', 'eth.dircdc.f.wr', 'axis', 'core'),
+  E('eth.dircdc.f.rd', 'eth.dirrtp', 'axis', 'k50'),
+  E('eth.adcrtp', 'eth.sw.b0.ctl', 'axis', 'k50', '1164 B packets'),
+  E('eth.micrtp', 'eth.sw.b1.ctl', 'axis', 'k50', '1164 B packets'),
+  E('eth.dirrtp', 'eth.sw.b2.ctl', 'axis', 'k50', '18 B packets'),
+  E('eth.sw.b0.ctl', 'eth.sw.arb', 'axis', 'k50'),
+  E('eth.sw.b1.ctl', 'eth.sw.arb', 'axis', 'k50'),
+  E('eth.sw.b2.ctl', 'eth.sw.arb', 'axis', 'k50'),
+  E('eth.sw.b0.ctl', 'eth.sw.b0.ram', 'sig', 'k50', 'packet bytes', { dir: 'both' }),
+  E('eth.sw.b1.ctl', 'eth.sw.b1.ram', 'sig', 'k50', 'packet bytes', { dir: 'both' }),
+  E('eth.sw.b2.ctl', 'eth.sw.b2.ram', 'sig', 'k50', 'packet bytes', { dir: 'both' }),
+  E('eth.sw.arb', 'eth.udp.udpp', 'axis', 'k50', 'RTP bytes'),
+  E('eth.sw.arb', 'eth.lensel', 'sig', 'k50', 'out_sel'),
+  E('eth.lensel', 'eth.regs', 'sig', 'k50', 'tx_length', { rev: true }),
+  E('eth.regs', 'eth.udp.udpp', 'sig', 'k50', 'UDP + IPv4 hdr', { bundle: 'txhdr', bundleName: 'TX headers', detail: 'Ports and datagram length; IP addresses and TTL' }),
+  E('eth.regs', 'eth.udp.ethp', 'sig', 'k50', 'Eth hdr', { bundle: 'txhdr', bundleName: 'TX headers', detail: 'Destination and source MAC' }),
+  E('eth.udp.udpp', 'eth.udp.ipp', 'axis', 'k50', 'UDP datagram'),
+  E('eth.udp.udpp', 'eth.udp.ipp', 'sig', 'k50', 'IPv4 hdr'),
+  E('eth.udp.ipp', 'eth.udp.ethp', 'axis', 'k50', 'IPv4 packet'),
+  E('eth.udp.ethp', 'eth.rmii.tx', 'axis', 'k50', 'Ethernet frame'),
+  E('eth.rmii.tx', 'phychip', 'sig', 'k50', 'RMII TX', { bundle: 'rmii', bundleName: 'RMII', detail: 'TXD[1:0], TX_EN' }),
+  E('phychip', 'eth.rmii.rx', 'sig', 'k50', 'RMII RX', { rev: true, bundle: 'rmii', bundleName: 'RMII', detail: 'RXD[1:0], CRS_DV, RX_ER' }),
+  E('eth.rmii.rx', 'eth.udp.ethd', 'axis', 'k50', 'frames', { rev: true, unused: true }),
+  E('eth.udp.ethd', 'eth.udp.ipd', 'axis', 'k50', '', { rev: true, unused: true }),
+  E('eth.udp.ipd', 'eth.udp.udpd', 'axis', 'k50', '', { rev: true, unused: true }),
+  E('eth.udp.udpd', 'eth.regs', 'sig', 'k50', 'RX hdr', { rev: true, unused: true, detail: 'Headers of the last datagram received' }),
+  E('eth.regs', 'eth.udp.ethd', 'sig', 'k50', 'RX filter', { unused: true, detail: 'local MAC / IP, promiscuous' }),
+
+  // Everything else off-chip
+  E('led', 'rgb', 'sig', 'k50', 'PWM'),
+  E('sramc', 'sram', 'sig', 'sram', 'QSPI', { dir: 'both', detail: 'SCK (clk_sram), CS_n, SIO[3:0]' }),
+  E('ft', 'host', 'sig', 'ext', 'USB', { dir: 'both' }),
+  E('phychip', 'rj45', 'sig', 'ext', 'MDI', { dir: 'both' }),
+  E('rj45', 'host', 'sig', 'ext', 'Ethernet', { dir: 'both', detail: 'RTP over UDP: ADC0, MIC0 and DIR0 streams' }),
+];
+
+// Detail levels: -1 board (FPGA closed), 0 top-level modules, 1 subsystems, 2 datapath, 3 primitives
+const LEVELS = [-1, 0, 1, 2, 3];
+const levelBtn = L => $('lvl-' + (L < 0 ? 'b' : L));
+
+// ---------------------------------------------------------------------------
+// Index the tree
+// ---------------------------------------------------------------------------
+const byId = new Map();
+(function index(list, parent) {
+  for (const n of list) {
+    n.parent = parent;
+    n.id = (!parent || parent.kind === 'fpga') ? n.key : `${parent.id}.${n.key}`;
+    if (byId.has(n.id)) console.warn('duplicate id', n.id);
+    byId.set(n.id, n);
+    if (n.children) index(n.children, n);
+  }
+})(TREE, null);
+for (const e of EDGES) for (const id of [e.s, e.t]) if (!byId.has(id)) console.warn('edge to unknown node', id);
+
+const collapsible = n => !!n.children && n.kind !== 'group';
+const clkOf = n => {
+  const c = n.clk;
+  if (typeof c === 'string') return { main: c, split: null, in: [], out: [] };
+  if (Array.isArray(c)) return { main: c[0], split: c, in: [], out: [] };
+  return { main: c.main, split: null, in: c.in || [], out: c.out || [] };
+};
+const domCache = new Map();
+function domsOf(n) {
+  if (domCache.has(n.id)) return domCache.get(n.id);
+  const c = clkOf(n), s = new Set([c.main, ...(c.split || []), ...c.in, ...c.out]);
+  if (n.outs) n.outs.forEach(o => s.add(o[0]));
+  if (n.children) n.children.forEach(ch => domsOf(ch).forEach(d => s.add(d)));
+  domCache.set(n.id, s);
+  return s;
+}
+const nameOf = n => n.mod || n.title;
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const opts = { labels: false, unused: true };
+const expanded = new Set();
+let focusDom = null;
+const visible = n => !(n.unused && !opts.unused);
+const isOpen = n => n.kind === 'group' || expanded.has(n.id);
+
+function levelSet(L) {
+  const s = new Set();
+  for (const n of byId.values()) if (collapsible(n) && (n.lvl ?? 3) <= L) s.add(n.id);
+  return s;
+}
+function setLevel(L) {
+  expanded.clear();
+  levelSet(L).forEach(id => expanded.add(id));
+}
+
+// Deepest visible block standing in for a node
+function rep(id) {
+  const n = byId.get(id);
+  const chain = [];
+  for (let c = n; c; c = c.parent) chain.unshift(c);
+  for (const c of chain) {
+    if (!visible(c)) return null;
+    if (c === n) return c;
+    if (!(c.children && isOpen(c))) return c;
+  }
+  return n;
+}
+
+function visibleEdges() {
+  const map = new Map();
+  for (const e of EDGES) {
+    if (e.unused && !opts.unused) continue;
+    const s = rep(e.s), t = rep(e.t);
+    if (!s || !t || s === t) continue;
+    const pair = s.id < t.id ? `${s.id}|${t.id}` : `${t.id}|${s.id}`;
+    const key = e.bundle ? `B:${e.bundle}:${pair}` : `E:${s.id}>${t.id}:${e.type}:${e.label}`;
+    const cur = map.get(key);
+    if (cur) {
+      cur.parts.push(e);
+      if (cur.s !== s.id) cur.both = true;
+      cur.unused = cur.unused && !!e.unused;
+      cur.idle = cur.idle && !!e.idle;
+      continue;
+    }
+    map.set(key, {
+      s: s.id, t: t.id, type: e.type, clk: e.clk, rev: !!e.rev, unused: !!e.unused, idle: !!e.idle,
+      both: e.type === 'apb' || e.dir === 'both', parts: [e], bundleName: e.bundleName,
+    });
+  }
+  const out = [...map.values()];
+  out.forEach((v, i) => {
+    v.idx = i;
+    v.label = v.parts.length > 1 && v.bundleName ? v.bundleName : v.parts[0].label;
+  });
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Text measurement and block sizes
+// ---------------------------------------------------------------------------
+const F = {
+  mod: '600 12px "IBM Plex Mono", ui-monospace, monospace',
+  dev: '600 12.5px "IBM Plex Sans", system-ui, sans-serif',
+  hdr: '600 12px "IBM Plex Mono", ui-monospace, monospace',
+  fpga: '600 15px "IBM Plex Sans", system-ui, sans-serif',
+  cap: '400 11px "IBM Plex Sans Condensed", "Arial Narrow", sans-serif',
+  lab: '500 10.5px "IBM Plex Sans Condensed", "Arial Narrow", sans-serif',
+  tag: '600 8.5px "IBM Plex Sans Condensed", "Arial Narrow", sans-serif',
+};
+const mctx = document.createElement('canvas').getContext('2d');
+const mcache = new Map();
+function measure(text, font) {
+  const k = font + '|' + text;
+  if (!mcache.has(k)) { mctx.font = font; mcache.set(k, mctx.measureText(text).width); }
+  return mcache.get(k);
+}
+const usesMono = n => !!n.mod || n.mono;
+const tagText = n => [n.tag, n.count ? `×${n.count}` : ''].filter(Boolean).join(' ');
+
+function leafSize(n) {
+  if (n.kind === 'pll') return { w: 184, h: 48 + n.outs.length * 19 };
+  if (n.kind === 'fpga') return { w: 280, h: 300 };
+  if (n.kind === 'button') {
+    return { w: Math.ceil(Math.max(110, measure(n.title, F.dev) + 24, measure(n.cap, F.cap) + 20)), h: 66 };
+  }
+  const c = clkOf(n);
+  const tw = measure(nameOf(n), usesMono(n) ? F.mod : F.dev);
+  const cw = n.cap ? measure(n.cap, F.cap) : 0;
+  let corner = 0;
+  if (tagText(n)) corner = measure(tagText(n), F.tag) + tagText(n).length * .6 + 8;
+  if (collapsible(n)) corner = Math.max(corner, 18);
+  let w = Math.max(tw + 2 * corner, cw) + 26;
+  w += (c.in.length ? 7 : 0) + (c.out.length ? 7 : 0);
+  w = Math.max(w, n.kind === 'sync' ? 74 : 96);
+  let h = n.cap ? 44 : 32;
+  if (n.count) { w += 4; h += 4; }
+  return { w: Math.ceil(w), h };
+}
+function headerWidth(n) {
+  const tw = measure(nameOf(n), n.kind === 'fpga' ? F.fpga : n.kind === 'group' ? F.dev : F.hdr);
+  const cw = n.cap ? measure(n.cap, F.cap) + 8 : 0;
+  return Math.ceil(12 + tw + cw + (collapsible(n) ? 56 : 16));
+}
+
+// ---------------------------------------------------------------------------
+// ELK graph
+// ---------------------------------------------------------------------------
+const LO = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'RIGHT',
+  'elk.edgeRouting': 'ORTHOGONAL',
+  'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+  'elk.layered.thoroughness': '10',
+  'elk.spacing.nodeNode': '20',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '34',
+  'elk.spacing.edgeNode': '15',
+  'elk.spacing.edgeEdge': '13',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '19',
+  'elk.layered.spacing.edgeEdgeBetweenLayers': '13',
+  'elk.spacing.edgeLabel': '3',
+  'elk.spacing.labelNode': '6',
+  // One layering for everything in a frame, so edge-pinned blocks (led_cube, sram_controller)
+  // reach the frame edge and off-chip devices line up with the blocks they connect to
+  'elk.separateConnectedComponents': 'false',
+};
+
+// Flow direction per container. Each container is laid out on its own (bottom-up), so the long
+// mic → DSP → Ethernet chain can fold: the FPGA runs left to right while the DSP pipeline and
+// the Ethernet subsystem run top to bottom.
+const DIRS = { root: 'RIGHT', fpga: 'RIGHT', tdoa: 'DOWN', eth: 'DOWN' };
+// Containers whose ports stay on the left (in) and right (out) edges whatever their inner direction
+const SIDE_PORTS = new Set(['tdoa', 'eth']);
+// Top-level modules wired to off-chip devices sit against the matching edge of the FPGA frame
+const EDGE_LAYER = {
+  pll0: 'FIRST', pll1: 'FIRST', i2s: 'FIRST', adc: 'FIRST', uart: 'FIRST', flash: 'FIRST', bbtie: 'FIRST',
+  led: 'LAST', sramc: 'LAST', smi: 'LAST',
+};
+
+// Every edge is cut into segments, one per container it passes through, joined at ports on the
+// container frames. Segments are declared in the container that holds them.
+function buildGraph() {
+  const vedges = visibleEdges();
+  const nodes = new Map();
+  function node(n) {
+    const o = { id: n.id };
+    nodes.set(n.id, o);
+    if (n.children && isOpen(n)) {
+      const top = n.kind === 'fpga' ? 46 : 34;
+      o.children = n.children.filter(visible).map(node);
+      o.ports = [];
+      o.edges = [];
+      o.layoutOptions = {
+        ...LO,
+        'elk.direction': DIRS[n.id] || 'RIGHT',
+        'elk.padding': `[top=${top},left=16,bottom=16,right=16]`,
+        'elk.nodeSize.constraints': 'MINIMUM_SIZE',
+        'elk.nodeSize.minimum': `(${headerWidth(n)}, ${top + 24})`,
+      };
+      if (SIDE_PORTS.has(n.id)) o.layoutOptions['elk.portConstraints'] = 'FIXED_SIDE';
+    } else {
+      const sz = leafSize(n);
+      o.width = sz.w; o.height = sz.h;
+    }
+    if (EDGE_LAYER[n.id] && n.parent && n.parent.kind === 'fpga') {
+      o.layoutOptions = { ...(o.layoutOptions || {}), 'elk.layered.layering.layerConstraint': EDGE_LAYER[n.id] };
+    }
+    return o;
+  }
+  const root = {
+    id: 'root',
+    layoutOptions: { ...LO, 'elk.direction': DIRS.root, 'elk.padding': '[top=24,left=24,bottom=24,right=24]' },
+    children: TREE.filter(visible).map(node),
+    edges: [],
+  };
+  nodes.set('root', root);
+
+  const chain = id => {
+    const out = [];
+    for (let p = byId.get(id).parent; p; p = p.parent) out.push(p.id);
+    out.push('root');
+    return out;
+  };
+  for (const v of vedges) {
+    const band = v.type === 'axis' || v.type === 'apb';
+    const showLabel = v.label && (!band || opts.labels);
+    const a = v.rev ? v.t : v.s, b = v.rev ? v.s : v.t;
+    const A = chain(a), B = chain(b);
+    const lca = A.find(x => B.includes(x));
+    const up = A.slice(0, A.indexOf(lca));
+    const down = B.slice(0, B.indexOf(lca)).reverse();
+    let k = 0;
+    v.segs = [];
+    v.labelSeg = null;
+    const port = (cid, out) => {
+      const id = `p${v.idx}@${cid}`;
+      const p = { id, width: 0, height: 0 };
+      if (SIDE_PORTS.has(cid)) p.layoutOptions = { 'elk.port.side': out ? 'EAST' : 'WEST' };
+      nodes.get(cid).ports.push(p);
+      return id;
+    };
+    const seg = (cont, src, tgt, withLabel) => {
+      const id = `e${v.idx}_${k++}`;
+      const e = { id, sources: [src], targets: [tgt], layoutOptions: { 'elk.edge.thickness': band ? '11' : v.type === 'power' ? '3' : '2' } };
+      if (withLabel) {
+        e.labels = [{
+          id: 'l' + id, text: v.label, width: Math.ceil(measure(v.label, F.lab) + 12), height: 16,
+          layoutOptions: { 'elk.edgeLabels.inline': 'true', 'elk.edgeLabels.placement': 'CENTER' },
+        }];
+        v.labelSeg = id;
+      }
+      nodes.get(cont).edges.push(e);
+      v.segs.push(id);
+    };
+    let cur = a;
+    for (const U of up) { const p = port(U, true); seg(U, cur, p, false); cur = p; }
+    const first = down.length ? port(down[0], false) : b;
+    seg(lca, cur, first, showLabel);
+    cur = first;
+    down.forEach((D, i) => {
+      const nxt = i + 1 < down.length ? port(down[i + 1], false) : b;
+      seg(D, cur, nxt, false);
+      cur = nxt;
+    });
+  }
+  return { elkGraph: root, vedges };
+}
+
+// ---------------------------------------------------------------------------
+// SVG drawing
+// ---------------------------------------------------------------------------
+const NS = 'http://www.w3.org/2000/svg';
+function S(tag, attrs, parent) {
+  const el = document.createElementNS(NS, tag);
+  if (attrs) for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+const $ = id => document.getElementById(id);
+const svg = $('dia'), vp = $('vp'), defs = $('defs');
+const L = { boxes: $('layer-boxes'), edges: $('layer-edges'), nodes: $('layer-nodes') };
+
+function grad(doms, suffix) {
+  const id = `g-${doms.join('-')}${suffix}`;
+  if (!defs.querySelector('#' + id)) {
+    const lg = S('linearGradient', { id, x1: 0, y1: 0, x2: 1, y2: 0 }, defs);
+    const step = 1 / doms.length;
+    doms.forEach((d, i) => {
+      for (const off of [i * step, (i + 1) * step]) {
+        const st = S('stop', { offset: off }, lg);
+        st.style.stopColor = `var(--${d}${suffix})`;
+      }
+    });
+  }
+  return `url(#${id})`;
+}
+const fillOf = c => c.split ? grad(c.split, '') : `var(--${c.main})`;
+const tintOf = c => c.split ? grad(c.split, '-tint') : `var(--${c.main}-tint)`;
+const inkOf = c => c.split ? 'var(--x-ink)' : `var(--${c.main}-ink)`;
+
+function buildNode(n, open) {
+  const c = clkOf(n), kind = n.kind || 'module';
+  const g = S('g', { class: `node k-${kind}`, 'data-id': n.id });
+  g.dataset.doms = [...domsOf(n)].join(' ');
+  if (n.unused || n.idle) g.classList.add('unused');
+  const coll = collapsible(n);
+  if (coll) {
+    g.classList.add('collapsible');
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'button');
+    g.setAttribute('aria-expanded', open ? 'true' : 'false');
+    g.setAttribute('aria-label', `${nameOf(n)}: ${open ? 'hide' : 'show'} internals`);
+  }
+  const fns = [];
+
+  if (open) {
+    g.classList.add('open');
+    const fpga = kind === 'fpga', group = kind === 'group';
+    const frame = S('rect', { class: 'frame', rx: fpga ? 6 : 4 }, g);
+    frame.style.fill = fpga ? 'var(--fpga)' : group ? 'var(--ext-tint)' : tintOf(c);
+    frame.style.stroke = fpga ? 'var(--fpga-ink)' : group ? 'var(--ext-ink)' : inkOf(c);
+    frame.style.strokeWidth = fpga ? '1.6' : '1.2';
+    if (n.unused || group) frame.style.strokeDasharray = '5 3';
+    const y = fpga ? 26 : 21;
+    const t = S('text', { class: fpga ? 't-fpga' : group ? 't-dev' : 't-hdr', x: 13, y }, g);
+    t.textContent = nameOf(n);
+    t.style.fill = 'var(--ink)';
+    if (n.cap) {
+      const cp = S('text', { class: 't-cap', x: 13 + measure(nameOf(n), fpga ? F.fpga : group ? F.dev : F.hdr) + 8, y }, g);
+      cp.textContent = n.cap;
+      cp.style.fill = 'var(--muted)';
+    }
+    let hit = null, btn = null, zb = null;
+    if (coll) {
+      hit = S('rect', { class: 'hdr-hit', x: 0, y: 0, height: 30, fill: 'transparent' }, g);
+      zb = S('g', { class: 'btn-c btn-z' }, g);
+      S('title', {}, zb).textContent = 'Zoom to this frame';
+      S('rect', { x: .5, y: .5, width: 15, height: 15, rx: 3 }, zb);
+      S('path', { d: 'M7 4.2a2.8 2.8 0 1 1 0 5.6a2.8 2.8 0 1 1 0-5.6M9 9l2.8 2.8' }, zb);
+      btn = S('g', { class: 'btn-c btn-x' }, g);
+      S('title', {}, btn).textContent = 'Hide internals';
+      S('rect', { x: .5, y: .5, width: 15, height: 15, rx: 3 }, btn);
+      S('path', { d: 'M4.5 8h7' }, btn);
+    }
+    fns.push((w, h) => {
+      frame.setAttribute('width', Math.max(0, w)); frame.setAttribute('height', Math.max(0, h));
+      if (hit) hit.setAttribute('width', Math.max(0, w));
+      if (btn) btn.setAttribute('transform', `translate(${w - 23},7)`);
+      if (zb) zb.setAttribute('transform', `translate(${w - 43},7)`);
+    });
+  } else if (kind === 'pll') {
+    const main = S('rect', { class: 'main', rx: 3 }, g);
+    main.style.fill = 'var(--surface)'; main.style.stroke = 'var(--fpga-ink)';
+    const t = S('text', { class: 't-mod', x: 11, y: 19 }, g); t.textContent = n.title; t.style.fill = 'var(--ink)';
+    const cp = S('text', { class: 't-cap', x: 11, y: 33 }, g); cp.textContent = n.cap; cp.style.fill = 'var(--muted)';
+    const rule = S('path', {}, g); rule.style.stroke = 'var(--line)';
+    const rows = n.outs.map(([d, name, div, f], i) => {
+      const y = 57 + i * 19;
+      const sw = S('rect', { x: 11, y: y - 10, width: 12, height: 12, rx: 2 }, g);
+      sw.style.fill = `var(--${d})`; sw.style.stroke = `var(--${d}-ink)`; sw.style.strokeWidth = '1.2';
+      const nm = S('text', { class: 't-pll', x: 29, y }, g); nm.textContent = name; nm.style.fill = 'var(--ink)';
+      const fr = S('text', { class: 't-cap', y, 'text-anchor': 'end' }, g); fr.textContent = `${div} · ${f}`; fr.style.fill = 'var(--muted)';
+      return fr;
+    });
+    fns.push((w, h) => {
+      main.setAttribute('width', w); main.setAttribute('height', h);
+      rule.setAttribute('d', `M11 41.5H${w - 11}`);
+      rows.forEach(fr => fr.setAttribute('x', w - 11));
+    });
+  } else if (kind === 'button') {
+    // Normally-open push button pulling to ground
+    const hit = S('rect', { fill: 'transparent' }, g);
+    const t = S('text', { class: 't-dev', 'text-anchor': 'middle', y: 13 }, g);
+    t.textContent = n.title; t.style.fill = 'var(--ink)';
+    const sym = S('path', { class: 'btn-sym' }, g);
+    sym.style.stroke = 'var(--ext-ink)';
+    const dots = [S('circle', { r: 2.4 }, g), S('circle', { r: 2.4 }, g)];
+    dots.forEach(d => { d.style.fill = 'var(--surface)'; d.style.stroke = 'var(--ext-ink)'; d.style.strokeWidth = '1.4'; });
+    const cp = S('text', { class: 't-cap', 'text-anchor': 'middle' }, g);
+    cp.textContent = n.cap; cp.style.fill = 'var(--muted)';
+    fns.push((w, h) => {
+      hit.setAttribute('width', w); hit.setAttribute('height', h);
+      const cx = w / 2, y = h / 2;
+      t.setAttribute('x', cx);
+      dots[0].setAttribute('cx', cx - 12); dots[0].setAttribute('cy', y);
+      dots[1].setAttribute('cx', cx + 12); dots[1].setAttribute('cy', y);
+      sym.setAttribute('d',
+        `M${cx + 14.4} ${y}H${w}` +                                   // lead to rst_in_n
+        `M${cx - 14.4} ${y}H${cx - 26}V${y + 8}` +                    // lead to ground
+        `M${cx - 32} ${y + 8}H${cx - 20}M${cx - 29.5} ${y + 11}H${cx - 22.5}M${cx - 27} ${y + 14}H${cx - 25}` +
+        `M${cx - 16} ${y - 7}H${cx + 16}M${cx} ${y - 7}V${y - 14}M${cx - 5} ${y - 14}H${cx + 5}`); // plunger
+      cp.setAttribute('x', cx); cp.setAttribute('y', h - 4);
+    });
+  } else {
+    const off = n.count ? 4 : 0;
+    let back = null;
+    let fill, stroke, textFill;
+    if (kind === 'ext') { fill = 'var(--ext)'; stroke = 'var(--ext-ink)'; textFill = 'var(--ink)'; }
+    else if (kind === 'fpga') { fill = 'var(--ink)'; stroke = 'var(--ink)'; textFill = 'var(--bg)'; }
+    else if (kind === 'hard') { fill = 'var(--surface)'; stroke = 'var(--fpga-ink)'; textFill = 'var(--ink)'; }
+    else if (kind === 'logic') { fill = tintOf(c); stroke = inkOf(c); textFill = 'var(--ink)'; }
+    else { fill = fillOf(c); stroke = inkOf(c); textFill = 'var(--on-fill)'; }
+    if (off) { back = S('rect', { class: 'back', rx: 2 }, g); back.style.fill = fill; back.style.stroke = stroke; back.style.strokeWidth = '1.2'; }
+    const main = S('rect', { class: 'main', rx: kind === 'ext' ? 3 : 2 }, g);
+    main.style.fill = fill; main.style.stroke = stroke;
+    if (kind === 'ext') main.style.strokeWidth = '1.4';
+    if (kind === 'logic' || n.unused) main.style.strokeDasharray = '4 3';
+    const strips = [];
+    c.in.forEach((d, i) => { const r = S('rect', {}, g); r.style.fill = `var(--${d})`; r.style.stroke = stroke; r.style.strokeWidth = '.8'; strips.push(['in', i, c.in.length, r]); });
+    c.out.forEach((d, i) => { const r = S('rect', {}, g); r.style.fill = `var(--${d})`; r.style.stroke = stroke; r.style.strokeWidth = '.8'; strips.push(['out', i, c.out.length, r]); });
+    const t = S('text', { class: kind === 'fpga' ? 't-fpga' : usesMono(n) ? 't-mod' : 't-dev', 'text-anchor': 'middle' }, g);
+    t.textContent = nameOf(n); t.style.fill = textFill;
+    let cp = null;
+    if (n.cap) { cp = S('text', { class: 't-cap', 'text-anchor': 'middle' }, g); cp.textContent = n.cap; cp.style.fill = textFill; cp.style.opacity = '.8'; }
+    let tg = null;
+    if (tagText(n)) { tg = S('text', { class: 't-tag', 'text-anchor': 'end' }, g); tg.textContent = tagText(n); tg.style.fill = textFill; tg.style.opacity = '.75'; }
+    let badge = null;
+    if (coll) {
+      badge = S('g', { class: 'badge' }, g);
+      S('rect', { x: .5, y: .5, width: 12, height: 12, rx: 2.5 }, badge);
+      S('path', { d: 'M3.5 6.5h6M6.5 3.5v6' }, badge);
+    }
+    fns.push((w, h) => {
+      const W = Math.max(0, w - off), H = Math.max(0, h - off);
+      if (back) { back.setAttribute('x', off); back.setAttribute('y', off); back.setAttribute('width', W); back.setAttribute('height', H); }
+      main.setAttribute('width', W); main.setAttribute('height', H);
+      const li = c.in.length ? 7 : 0, ri = c.out.length ? 7 : 0;
+      for (const [side, i, cnt, r] of strips) {
+        r.setAttribute('x', side === 'in' ? 0 : W - 7); r.setAttribute('y', i * H / cnt);
+        r.setAttribute('width', 7); r.setAttribute('height', H / cnt);
+      }
+      const cx = li + (W - li - ri) / 2;
+      t.setAttribute('x', cx); t.setAttribute('y', n.cap ? H / 2 - 2.5 : H / 2 + 4.2);
+      if (cp) { cp.setAttribute('x', cx); cp.setAttribute('y', H / 2 + 12.5); }
+      if (tg) { tg.setAttribute('x', W - ri - 5); tg.setAttribute('y', 11); }
+      if (badge) badge.setAttribute('transform', `translate(${W - ri - 16},3.5)`);
+    });
+  }
+  return {
+    el: g,
+    apply(r) {
+      g.setAttribute('transform', `translate(${r.x},${r.y})`);
+      for (const f of fns) f(r.w, r.h);
+    },
+  };
+}
+
+// Polyline helpers
+function trimStart(pts, d) {
+  pts = pts.map(p => ({ x: p.x, y: p.y }));
+  while (d > 0 && pts.length > 1) {
+    const a = pts[0], b = pts[1], len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len > d) { a.x += (b.x - a.x) / len * d; a.y += (b.y - a.y) / len * d; d = 0; }
+    else { pts.shift(); d -= len; }
+  }
+  return pts;
+}
+const trimEnd = (pts, d) => trimStart(pts.slice().reverse(), d).reverse();
+// Drop points that sit on a straight run, so the joins between segments don't show
+function simplify(pts) {
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = out[out.length - 1], b = pts[i], c = pts[i + 1];
+    const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    if (Math.abs(cross) > .5) out.push(b);
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+const pathD = pts => pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join('');
+function headPoly(pts, atStart, len, hw) {
+  const tip = atStart ? pts[0] : pts[pts.length - 1];
+  let prev = null;
+  if (atStart) { for (let i = 1; i < pts.length; i++) if (Math.hypot(pts[i].x - tip.x, pts[i].y - tip.y) > .5) { prev = pts[i]; break; } }
+  else { for (let i = pts.length - 2; i >= 0; i--) if (Math.hypot(pts[i].x - tip.x, pts[i].y - tip.y) > .5) { prev = pts[i]; break; } }
+  if (!prev) prev = { x: tip.x - 1, y: tip.y };
+  const dx = tip.x - prev.x, dy = tip.y - prev.y, l = Math.hypot(dx, dy) || 1;
+  const ux = dx / l, uy = dy / l, bx = tip.x - ux * len, by = tip.y - uy * len, nx = -uy, ny = ux;
+  return `${tip.x},${tip.y} ${bx + nx * hw},${by + ny * hw} ${bx - nx * hw},${by - ny * hw}`;
+}
+
+function drawEdge(v, pts, lab) {
+  const g = S('g', { class: `edge e-${v.type}`, 'data-ei': v.idx, 'data-clk': v.clk }, L.edges);
+  if (v.unused || v.idle) g.classList.add('unused');
+  const fill = `var(--${v.clk})`, ink = `var(--${v.clk}-ink)`;
+  const hStart = v.both || v.rev, hEnd = v.both || !v.rev;
+  if (v.type === 'axis' || v.type === 'apb') {
+    const HL = 12, HW = 9;
+    let o = pts, f = pts;
+    if (hStart) { o = trimStart(o, HL); f = trimStart(f, HL - 2.5); }
+    if (hEnd) { o = trimEnd(o, HL); f = trimEnd(f, HL - 2.5); }
+    S('path', { class: 'band-o', d: pathD(o) }, g).style.stroke = ink;
+    for (const at of [hStart && 'start', hEnd && 'end'].filter(Boolean)) {
+      const p = S('polygon', { points: headPoly(pts, at === 'start', HL, HW) }, g);
+      p.style.fill = fill; p.style.stroke = ink; p.style.strokeWidth = '1.3'; p.style.strokeLinejoin = 'miter';
+    }
+    S('path', { class: 'band-f', d: pathD(f) }, g).style.stroke = fill;
+  } else {
+    const pwr = v.type === 'power';
+    const HL = pwr ? 9 : 7, HW = pwr ? 4.6 : 3.6, col = pwr ? fill : ink;
+    let p = pts;
+    if (hStart) p = trimStart(p, HL - 1);
+    if (hEnd) p = trimEnd(p, HL - 1);
+    S('path', { class: pwr ? 'pwr-l' : v.type === 'clock' ? 'clk-l' : 'sig-l', d: pathD(p) }, g).style.stroke = col;
+    for (const at of [hStart && 'start', hEnd && 'end'].filter(Boolean)) {
+      S('polygon', { points: headPoly(pts, at === 'start', HL, HW) }, g).style.fill = col;
+    }
+  }
+  S('path', { class: 'hit', d: pathD(pts) }, g);
+  if (lab) {
+    const band = v.type === 'axis' || v.type === 'apb';
+    const r = S('rect', { x: lab.x, y: lab.y, width: lab.w, height: lab.h, rx: 3 }, g);
+    r.style.fill = band ? `var(--${v.clk}-tint)` : 'var(--surface)';
+    r.style.stroke = ink; r.style.strokeWidth = '.8';
+    const t = S('text', { class: 't-lab', x: lab.x + lab.w / 2, y: lab.y + lab.h / 2 + 3.6, 'text-anchor': 'middle' }, g);
+    t.textContent = lab.text; t.style.fill = 'var(--ink)';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Layout, render, animate
+// ---------------------------------------------------------------------------
+let elk = null;
+let geo = new Map();
+let current = { vedges: [] };
+let view = { k: 1, x: 0, y: 0 };
+let userMoved = false;
+let firstRender = true;
+let animId = 0;
+let seq = 0;
+let lastSize = { w: 0, h: 0 };
+const stage = $('stage');
+const statusEl = $('status');
+const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+
+function showStatus(t) { statusEl.textContent = t; statusEl.hidden = false; }
+function hideStatus() { statusEl.hidden = true; }
+
+function setView(v) {
+  view = v;
+  vp.setAttribute('transform', `translate(${v.x.toFixed(2)},${v.y.toFixed(2)}) scale(${v.k.toFixed(4)})`);
+  const s = 20 * v.k;
+  stage.style.backgroundSize = `${s}px ${s}px`;
+  stage.style.backgroundPosition = `${v.x.toFixed(1)}px ${v.y.toFixed(1)}px`;
+}
+function fitView() {
+  const r = stage.getBoundingClientRect();
+  const m = r.width < 600 ? 12 : 28;
+  const w = lastSize.w || 1, h = lastSize.h || 1;
+  const k = Math.max(.05, Math.min((r.width - 2 * m) / w, (r.height - 2 * m) / h, 1.6));
+  return { k, x: (r.width - w * k) / 2, y: (r.height - h * k) / 2 };
+}
+
+function collect(res) {
+  const g = new Map();
+  g.set('root', { x: 0, y: 0, w: res.width, h: res.height });
+  (function walk(n, ox, oy) {
+    for (const c of n.children || []) {
+      const x = ox + c.x, y = oy + c.y;
+      g.set(c.id, { x, y, w: c.width, h: c.height });
+      walk(c, x, y);
+    }
+  })(res, 0, 0);
+  return g;
+}
+
+function emergeFrom(n, r, prev, next) {
+  for (let a = n.parent; a; a = a.parent) {
+    const A = prev.get(a.id), P = next.get(a.id);
+    if (A && P && P.w > 0 && P.h > 0) {
+      const sx = A.w / P.w, sy = A.h / P.h;
+      return { x: A.x + (r.x - P.x) * sx, y: A.y + (r.y - P.y) * sy, w: r.w * sx, h: r.h * sy };
+    }
+  }
+  return r;
+}
+
+async function relayout(anchorId) {
+  if (!elk) return;
+  const my = ++seq;
+  const timer = setTimeout(() => showStatus('Laying out…'), 160);
+  try {
+    const { elkGraph, vedges } = buildGraph();
+    const res = await elk.layout(elkGraph);
+    if (my !== seq) return;
+    render(res, vedges, anchorId);
+    hideStatus();
+  } catch (err) {
+    console.error(err);
+    showStatus('Layout failed: ' + (err && err.message ? err.message : err));
+  } finally {
+    clearTimeout(timer);
+  }
+  syncControls();
+}
+
+function render(res, vedges, anchorId) {
+  stopAnim();
+  hideTip();
+  const prev = geo, next = collect(res);
+  geo = next;
+  current = { vedges };
+  lastSize = { w: res.width, h: res.height };
+  L.boxes.replaceChildren(); L.edges.replaceChildren(); L.nodes.replaceChildren();
+
+  const items = [];
+  (function walk(list) {
+    for (const n of list) {
+      if (!visible(n)) continue;
+      const r = next.get(n.id);
+      if (!r) continue;
+      const open = !!n.children && isOpen(n);
+      const it = buildNode(n, open);
+      (open ? L.boxes : L.nodes).appendChild(it.el);
+      it.to = r;
+      it.from = prev.get(n.id) || emergeFrom(n, r, prev, next);
+      it.fade = !firstRender && !prev.has(n.id);
+      items.push(it);
+      if (open) walk(n.children);
+    }
+  })(TREE);
+
+  // Edge segments, in absolute coordinates. Each container's edges are relative to that container.
+  const segs = new Map();
+  (function walk(n, ox, oy) {
+    for (const e of n.edges || []) {
+      const s = e.sections && e.sections[0];
+      if (!s) continue;
+      const l = e.labels && e.labels[0];
+      segs.set(e.id, {
+        pts: [s.startPoint, ...(s.bendPoints || []), s.endPoint].map(p => ({ x: p.x + ox, y: p.y + oy })),
+        lab: l && l.x != null ? { x: l.x + ox, y: l.y + oy, w: l.width, h: l.height, text: l.text } : null,
+      });
+    }
+    for (const c of n.children || []) walk(c, ox + c.x, oy + c.y);
+  })(res, 0, 0);
+  for (const v of vedges) {
+    const pts = [];
+    let ok = true;
+    for (const id of v.segs) {
+      const s = segs.get(id);
+      if (!s) { ok = false; break; }
+      for (const p of s.pts) {
+        const q = pts[pts.length - 1];
+        if (!q || Math.abs(q.x - p.x) > .5 || Math.abs(q.y - p.y) > .5) pts.push(p);
+      }
+    }
+    if (!ok || pts.length < 2) continue;
+    const ls = v.labelSeg && segs.get(v.labelSeg);
+    drawEdge(v, simplify(pts), ls ? ls.lab : null);
+  }
+
+  let target;
+  const A = anchorId && prev.get(anchorId), B = anchorId && next.get(anchorId);
+  if (userMoved && A && B) target = { k: view.k, x: view.x + view.k * (A.x - B.x), y: view.y + view.k * (A.y - B.y) };
+  else { target = fitView(); userMoved = false; }
+
+  applyFocus();
+  animate(items, target);
+  firstRender = false;
+}
+
+const lerp = (a, b, e) => a + (b - a) * e;
+const ease = u => u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+let finishAnim = null;
+function stopAnim() {
+  cancelAnimationFrame(animId);
+  if (finishAnim) { const f = finishAnim; finishAnim = null; f(); }
+}
+
+function animate(items, target) {
+  const from = { ...view };
+  const done = () => {
+    items.forEach(it => { it.apply(it.to); it.el.style.opacity = ''; });
+    setView(target);
+    L.edges.style.transition = 'opacity .22s ease-out';
+    L.edges.style.opacity = '1';
+  };
+  if (firstRender || reduceMotion.matches) {
+    done();
+    L.edges.style.transition = 'none';
+    return;
+  }
+  L.edges.style.transition = 'none';
+  L.edges.style.opacity = '0';
+  finishAnim = done;
+  const t0 = performance.now(), D = 440;
+  // If frames are throttled (background tab), still land on the final layout
+  const guard = setTimeout(() => { if (finishAnim === done) stopAnim(); }, D + 400);
+  const doneOnce = done;
+  function frame(now) {
+    const u = Math.min(1, (now - t0) / D), e = ease(u);
+    for (const it of items) {
+      const f = it.from, t = it.to;
+      it.apply({ x: lerp(f.x, t.x, e), y: lerp(f.y, t.y, e), w: lerp(f.w, t.w, e), h: lerp(f.h, t.h, e) });
+      if (it.fade) it.el.style.opacity = String(Math.min(1, e * 1.4));
+    }
+    setView({ k: lerp(from.k, target.k, e), x: lerp(from.x, target.x, e), y: lerp(from.y, target.y, e) });
+    if (u < 1) animId = requestAnimationFrame(frame);
+    else { clearTimeout(guard); finishAnim = null; doneOnce(); }
+  }
+  animId = requestAnimationFrame(frame);
+}
+
+function tweenView(target) {
+  stopAnim();
+  if (reduceMotion.matches) { setView(target); return; }
+  const from = { ...view }, t0 = performance.now(), D = 380;
+  const fin = () => setView(target);
+  finishAnim = fin;
+  setTimeout(() => { if (finishAnim === fin) stopAnim(); }, D + 400);
+  function frame(now) {
+    const u = Math.min(1, (now - t0) / D), e = ease(u);
+    setView({ k: lerp(from.k, target.k, e), x: lerp(from.x, target.x, e), y: lerp(from.y, target.y, e) });
+    if (u < 1) animId = requestAnimationFrame(frame);
+    else finishAnim = null;
+  }
+  animId = requestAnimationFrame(frame);
+}
+
+// ---------------------------------------------------------------------------
+// Interaction
+// ---------------------------------------------------------------------------
+function toggle(n) {
+  if (!collapsible(n)) return;
+  if (expanded.has(n.id)) {
+    for (const id of [...expanded]) if (id === n.id || id.startsWith(n.id + '.')) expanded.delete(id);
+  } else {
+    // Open single-child wrappers along with their parent, so a click shows real internals
+    for (let c = n; c && collapsible(c); c = c.children.length === 1 ? c.children[0] : null) expanded.add(c.id);
+  }
+  relayout(n.id);
+}
+
+function handleClick(target) {
+  const g = target && target.closest ? target.closest('.node') : null;
+  if (!g) return;
+  const n = byId.get(g.dataset.id);
+  if (!n || !collapsible(n)) return;
+  if (target.closest('.btn-z')) { zoomTo(n.id); return; }
+  if (g.classList.contains('open') && !target.closest('.hdr-hit, .btn-x')) return;
+  toggle(n);
+}
+
+function zoomTo(id) {
+  const r = geo.get(id);
+  if (!r) return;
+  const s = stage.getBoundingClientRect(), m = 24;
+  const k = Math.max(.05, Math.min((s.width - 2 * m) / r.w, (s.height - 2 * m) / r.h, 2.2));
+  tweenView({ k, x: (s.width - r.w * k) / 2 - r.x * k, y: (s.height - r.h * k) / 2 - r.y * k });
+  userMoved = true;
+}
+
+function applyFocus() {
+  svg.querySelectorAll('.node').forEach(g => {
+    g.classList.toggle('dim', !!focusDom && !g.dataset.doms.split(' ').includes(focusDom));
+  });
+  svg.querySelectorAll('.edge').forEach(g => g.classList.toggle('dim', !!focusDom && g.dataset.clk !== focusDom));
+  document.querySelectorAll('.dom').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.dom === focusDom)));
+}
+
+function syncControls() {
+  for (const L of LEVELS) {
+    const s = levelSet(L);
+    const same = s.size === expanded.size && [...s].every(id => expanded.has(id));
+    levelBtn(L).setAttribute('aria-pressed', String(same));
+  }
+}
+
+// Pan, zoom, click
+const pointers = new Map();
+let gesture = null;
+function zoomAt(px, py, f) {
+  const k = Math.max(.05, Math.min(4, view.k * f));
+  const real = k / view.k;
+  setView({ k, x: px - (px - view.x) * real, y: py - (py - view.y) * real });
+  userMoved = true;
+}
+function localPt(e) { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+
+svg.addEventListener('pointerdown', e => {
+  if (e.button !== 0 && e.pointerType === 'mouse') return;
+  stopAnim();
+  pointers.set(e.pointerId, localPt(e));
+  try { svg.setPointerCapture(e.pointerId); } catch (_) { /* fine without capture */ }
+  if (pointers.size === 1) {
+    const p = localPt(e);
+    gesture = { type: 'pan', sx: p.x, sy: p.y, vx: view.x, vy: view.y, moved: false, target: e.target };
+  } else if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    gesture = { type: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y) || 1, moved: true };
+  }
+});
+svg.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) { hoverTip(e); return; }
+  const p = localPt(e);
+  pointers.set(e.pointerId, p);
+  if (!gesture) return;
+  if (gesture.type === 'pan' && pointers.size === 1) {
+    const dx = p.x - gesture.sx, dy = p.y - gesture.sy;
+    if (!gesture.moved && Math.hypot(dx, dy) > 4) { gesture.moved = true; svg.classList.add('panning'); hideTip(); }
+    if (gesture.moved) { setView({ k: view.k, x: gesture.vx + dx, y: gesture.vy + dy }); userMoved = true; }
+  } else if (gesture.type === 'pinch' && pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, d / gesture.d);
+    gesture.d = d;
+  }
+});
+function endPointer(e, cancelled) {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  if (!cancelled && gesture && gesture.type === 'pan' && !gesture.moved && pointers.size === 0) handleClick(gesture.target);
+  if (pointers.size === 0) { gesture = null; svg.classList.remove('panning'); }
+}
+svg.addEventListener('pointerup', e => endPointer(e, false));
+svg.addEventListener('pointercancel', e => endPointer(e, true));
+svg.addEventListener('pointerleave', () => { if (!pointers.size) hideTip(); });
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  stopAnim();
+  const p = localPt(e);
+  const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+  zoomAt(p.x, p.y, Math.exp(-dy * .0016));
+}, { passive: false });
+svg.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const g = e.target.closest && e.target.closest('.node.collapsible');
+  if (!g) return;
+  e.preventDefault();
+  toggle(byId.get(g.dataset.id));
+});
+
+// Tooltip
+const tip = $('tip');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function domChips(doms) {
+  return [...doms].filter(d => DOMS[d] && d !== 'ext' && d !== 'x')
+    .map(d => `<span class="chip" style="background:var(--${d});border-color:var(--${d}-ink)">${DOMS[d].name}</span>`).join('');
+}
+const KIND = {
+  logic: 'Logic inside the parent module', mem: 'Memory primitive', sync: 'Two-flop synchronizer', ext: 'Off-chip',
+  pll: 'Hard PLL', fpga: 'Device', hard: 'Hard block in the FPGA package', button: 'Off-chip push button', group: 'Board section',
+};
+function nodeTip(n) {
+  const open = !!n.children && isOpen(n);
+  let h = n.mod
+    ? `<h4>${esc(n.mod)} <span class="inst">${esc(n.inst || '')}</span></h4>`
+    : `<h4 class="${n.mono ? '' : 'dev'}">${esc(n.title)}</h4>`;
+  const kind = n.unused ? 'Commented out in udp_stack.sv, so not built' : n.idle ? 'Tied off in cain_top' : KIND[n.kind] || 'RTL module';
+  h += `<div class="kind">${esc(kind)}${n.cap ? ' · ' + esc(n.cap) : ''}</div>`;
+  if (n.desc) h += `<p>${esc(n.desc)}</p>`;
+  const chips = domChips(domsOf(n));
+  if (chips) h += `<div class="chips">${chips}</div>`;
+  if (n.mod && MODFILE[n.mod]) h += `<div class="file">${esc(MODFILE[n.mod])}</div>`;
+  if (collapsible(n)) h += `<div class="act">${open ? 'Click the title bar to hide its internals' : `Click to show the ${n.children.length} block${n.children.length > 1 ? 's' : ''} inside`}</div>`;
+  return h;
+}
+const TYPE = { axis: 'AXI-Stream', apb: 'APB', sig: 'Signals', clock: 'Clock', power: 'Power rail' };
+function edgeTip(v) {
+  const d = DOMS[v.clk];
+  let h = `<h4 class="dev">${esc(v.label || TYPE[v.type])}</h4>`;
+  h += `<div class="kind">${TYPE[v.type]}${d && v.clk !== 'ext' && v.clk !== 'x' ? ' · ' + d.name : v.clk === 'x' ? ' · asynchronous' : ''} · ${esc(nameOf(byId.get(v.s)))} ${v.both ? '↔' : '→'} ${esc(nameOf(byId.get(v.t)))}</div>`;
+  if (v.parts.length > 1) {
+    h += '<ul>' + v.parts.map(p => `<li>${esc(p.label || TYPE[p.type])}${p.detail ? ': ' + esc(p.detail) : ''}</li>`).join('') + '</ul>';
+  } else if (v.parts[0].detail) h += `<p>${esc(v.parts[0].detail)}</p>`;
+  if (v.unused) h += '<p>Unused: the receive path is commented out in udp_stack.sv.</p>';
+  else if (v.idle) h += '<p>Unused: tied off in cain_top.</p>';
+  return h;
+}
+let tipKey = null;
+function hoverTip(e) {
+  const t = e.target;
+  const ng = t.closest && t.closest('.node'), eg = t.closest && t.closest('.edge');
+  let key = null, html = null;
+  if (eg) { const v = current.vedges[+eg.dataset.ei]; if (v) { key = 'e' + v.idx; html = edgeTip(v); } }
+  else if (ng) { const n = byId.get(ng.dataset.id); if (n) { key = n.id; html = nodeTip(n); } }
+  if (!html) { hideTip(); return; }
+  if (key !== tipKey) { tip.innerHTML = html; tipKey = key; }
+  tip.hidden = false;
+  const r = stage.getBoundingClientRect(), p = localPt(e);
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let x = p.x + 16, y = p.y + 16;
+  if (x + tw > r.width - 8) x = p.x - tw - 12;
+  if (y + th > r.height - 8) y = p.y - th - 12;
+  tip.style.left = Math.max(8, x) + 'px';
+  tip.style.top = Math.max(8, y) + 'px';
+}
+function hideTip() { tip.hidden = true; tipKey = null; }
+
+// Controls
+document.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => {
+  setLevel(+b.dataset.level); userMoved = false; relayout();
+}));
+$('opt-labels').addEventListener('change', e => { opts.labels = e.target.checked; relayout(); });
+$('opt-unused').addEventListener('change', e => { opts.unused = e.target.checked; relayout(); });
+$('z-in').addEventListener('click', () => { const r = stage.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1.25); });
+$('z-out').addEventListener('click', () => { const r = stage.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1 / 1.25); });
+$('z-fit').addEventListener('click', () => { userMoved = false; tweenView(fitView()); });
+const appEl = $('app');
+$('z-full').addEventListener('click', () => {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else if (appEl.requestFullscreen) appEl.requestFullscreen().catch(() => {});
+  } catch (_) { /* not available here */ }
+});
+document.addEventListener('fullscreenchange', () => { $('z-full').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen'; });
+document.querySelectorAll('.dom').forEach(b => b.addEventListener('click', () => {
+  focusDom = focusDom === b.dataset.dom ? null : b.dataset.dom;
+  applyFocus();
+}));
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest && e.target.closest('input, textarea, select')) return;
+  if (/^[0-4]$/.test(e.key)) { setLevel(+e.key - 1); userMoved = false; relayout(); }
+  else if (e.key === 'f' || e.key === 'F') { userMoved = false; tweenView(fitView()); }
+  else if (e.key === 'Escape' && focusDom) { focusDom = null; applyFocus(); }
+});
+if (window.ResizeObserver) {
+  new ResizeObserver(() => { if (!userMoved && lastSize.w) setView(fitView()); }).observe(stage);
+}
+
+// ---------------------------------------------------------------------------
+// Start
+// ---------------------------------------------------------------------------
+async function start() {
+  if (typeof window.ELK !== 'function') {
+    showStatus('The layout engine (elkjs from cdn.jsdelivr.net) did not load. Check the connection and reload.');
+    return;
+  }
+  elk = new window.ELK();
+  try {
+    if (document.fonts && document.fonts.load) {
+      await Promise.race([
+        Promise.all([F.mod, F.dev, F.fpga, F.cap, F.lab, F.tag].map(f => document.fonts.load(f, 'Ab0'))),
+        new Promise(r => setTimeout(r, 2500)),
+      ]);
+    }
+  } catch (_) { /* fall back to system fonts */ }
+  mcache.clear();
+  setLevel(1);
+  showStatus('Laying out…');
+  relayout();
+}
+start();
+})();
+</script>
+
+</body>
+</html>
