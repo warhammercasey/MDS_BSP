@@ -14,17 +14,20 @@
 // CRC-32 and checksum, and the RTP packet from a model of each stream (sequence,
 // timestamp, marker on the first, SSRC, samples big endian and left justified).
 //
-//   rx         a datagram sent to us shows in the RX registers (RX path is wired)
+// RX = 0 (ethernet_tx, ethernet_tx_no_buffer):
 //   real rate  samples at about the board's rates
 //   saturated  both streams send as fast as they're taken: everything backs up to the
 //              sources, and frames must still be whole, correct and in order, with
 //              both streams getting through
-// At the end TX_COUNT must match the frames seen.
+//   At the end TX_COUNT must match the frames seen.
+// RX = 1 (ethernet_rx):
+//   rx         a datagram sent to us shows in the RX registers (RX path is wired)
 //
-// TX_BUFFER is the DUT's: the ethernet_no_tx_buffer test runs this with it off, where
+// TX_BUFFER is the DUT's: the ethernet_tx_no_buffer test runs this with it off, where
 // rmii_tx must never be left waiting for a byte mid-frame (checked directly too).
 module tb_ethernet #(
-    parameter int TX_BUFFER = 1
+    parameter int TX_BUFFER = 1,
+    parameter bit RX        = 0  // Run the RX test instead of the TX ones
 );
     import tb_pkg::*;
 
@@ -464,8 +467,8 @@ module tb_ethernet #(
         byte unsigned p[$], f[$];
         int unsigned  adc0, mic0, dir0;
 
-        tb_info($sformatf("Testing ethernet: RTP payload %0d bytes (ADC %0d frames, mics %0d, directions %0d per packet), TX buffer %s",
-                          RTP_PAYLOAD_BYTES, FRAMES[0], FRAMES[1], FRAMES[2], TX_BUFFER ? "on" : "off"));
+        tb_info($sformatf("Testing ethernet %s: RTP payload %0d bytes (ADC %0d frames, mics %0d, directions %0d per packet), TX buffer %s",
+                          RX ? "RX" : "TX", RTP_PAYLOAD_BYTES, FRAMES[0], FRAMES[1], FRAMES[2], TX_BUFFER ? "on" : "off"));
         repeat (5) @(posedge clk);
         rstn     = 1'b1;
         rstn_io  = 1'b1;
@@ -486,17 +489,21 @@ module tb_ethernet #(
         apb_write(TX_TTL, {24'h0, cfg_ttl});
         apb_write(TX_PORTS, {cfg_src_port, cfg_dst_port});
 
-        // --- RX: a datagram to us shows in the registers ---
-        tb_info("RX");
-        p = {};
-        repeat (20) p.push_back(8'($urandom));
-        make_frame(f, p, cfg_local_mac, cfg_dst_mac, cfg_dst_ip, cfg_local_ip, 4000, 4001, 8'd64, 16'h1, 1'b0, 16'h0);
-        phy_send(f);
-        repeat (500) @(posedge clk);
-        apb_check(RX_COUNT, 1);
-        apb_check(RX_SRC_IP, cfg_dst_ip);
-        apb_check(RX_PORTS, {16'd4000, 16'd4001});
-        apb_check(RX_LENGTH, 20);
+        if (RX) begin
+            // --- RX: a datagram to us shows in the registers ---
+            tb_info("RX");
+            p = {};
+            repeat (20) p.push_back(8'($urandom));
+            make_frame(f, p, cfg_local_mac, cfg_dst_mac, cfg_dst_ip, cfg_local_ip, 4000, 4001, 8'd64, 16'h1, 1'b0, 16'h0);
+            phy_send(f);
+            repeat (500) @(posedge clk);
+            apb_check(RX_COUNT, 1);
+            apb_check(RX_SRC_IP, cfg_dst_ip);
+            apb_check(RX_PORTS, {16'd4000, 16'd4001});
+            apb_check(RX_LENGTH, 20);
+            apb_check(TX_COUNT, 0);
+            tb_finish();
+        end
 
         // --- About the board's rates: ADC 200k samples/s, mics 4 every 576 clk_io ---
         // (directions faster than the board's ~375/s, so the test doesn't take all day)

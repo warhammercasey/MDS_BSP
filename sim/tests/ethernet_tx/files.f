@@ -1,4 +1,5 @@
-// Sources for the ethernet sim. Paths are relative to the repo root.
+// Sources for the ethernet TX test (also used by ethernet_tx_no_buffer and ethernet_rx).
+// Paths are relative to the repo root.
 --top-module tb_ethernet
 +incdir+src/ethernet/packetization
 
@@ -28,4 +29,4 @@ src/ethernet/packetization/udp_stack.sv
 src/ethernet/packetization/udp_stack_regs.sv
 src/ethernet/ethernet.sv
 
-sim/tests/ethernet/tb_ethernet.sv
+sim/tests/ethernet_tx/tb_ethernet.sv

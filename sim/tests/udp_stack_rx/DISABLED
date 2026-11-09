@@ -1,0 +1,1 @@
+The RX path is commented out of udp_stack.sv (it used a lot of BRAM for nothing yet). Re-enable this test when it's back.

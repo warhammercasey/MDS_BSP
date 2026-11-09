@@ -1,4 +1,4 @@
-# GTKWave signals for the ethernet test. Paths are relative to tb_ethernet.
+# GTKWave signals for the ethernet_tx_no_buffer test. Paths are relative to tb_ethernet.
 # Format: see sim/waves.py
 
 clk

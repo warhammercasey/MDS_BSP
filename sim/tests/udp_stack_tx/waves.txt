@@ -1,4 +1,4 @@
-# GTKWave signals for the udp_stack test. Paths are relative to tb_udp_stack.
+# GTKWave signals for the udp_stack_tx test. Paths are relative to tb_udp_stack.
 # Format: see sim/waves.py
 
 clk
@@ -29,21 +29,4 @@ group TX
     mac_tx.tlast
     txen
     txd                 bin
-end
-
-group RX
-    crs_dv
-    rxd                 bin
-    mac_rx.tvalid
-    mac_rx.tdata        hex
-    mac_rx.tlast
-    stack.eth_depacketizer_i.state
-    stack.ipv4_depacketizer_i.state
-    stack.udp_depacketizer_i.state
-    rx_udp_hdr.valid
-    rx_udp_hdr.ready
-    rx_payload.tvalid
-    rx_payload.tready
-    rx_payload.tdata    hex
-    rx_payload.tlast
 end

@@ -18,6 +18,10 @@ A test is a directory sim/tests/<name>/ containing a files.f (Verilator
 filelist with --top-module and sources, paths relative to the repo root).
 The testbench must call tb_pkg::tb_finish(), which prints the verdict line.
 
+A test with a DISABLED file in its directory (its text says why) is left out of
+--all and glob patterns, and shows as DISABLED in the report. Naming it exactly
+still runs it.
+
 Outputs land in sim/out/<name>/: build.log, sim.log, waves.{fst,vcd}, result.json.
 sim/out/report.txt summarizes the latest result of every test.
 """
@@ -137,7 +141,7 @@ USE_COLOR = sys.stdout.isatty() and "NO_COLOR" not in os.environ
 if USE_COLOR and ON_WINDOWS:
     os.system("")  # enable ANSI escape handling in the Windows console
 
-STATUS_COLOR = {"PASS": "32", "FAIL": "31", "BUILD_FAIL": "31", "TIMEOUT": "33", "NO_VERDICT": "33"}
+STATUS_COLOR = {"PASS": "32", "FAIL": "31", "BUILD_FAIL": "31", "TIMEOUT": "33", "NO_VERDICT": "33", "DISABLED": "90"}
 
 
 def color_status(status: str) -> str:
@@ -261,16 +265,28 @@ class Result:
     first_errors: list[str] = field(default_factory=list)
 
 
+DISABLED_FILE = "DISABLED"  # per-test marker: left out of --all and patterns
+
+
 def discover_tests() -> list[str]:
     return sorted(d.name for d in TESTS_DIR.iterdir() if (d / "files.f").is_file())
 
 
+def disabled_reason(test: str) -> str | None:
+    """Why the test is disabled (its DISABLED file's text), or None if it isn't."""
+    f = TESTS_DIR / test / DISABLED_FILE
+    if not f.is_file():
+        return None
+    return " ".join(f.read_text(encoding="utf-8").split()) or "disabled"
+
+
 def select_tests(patterns: list[str], available: list[str]) -> list[str]:
+    """Tests matching the patterns. A disabled test is only taken when named exactly."""
     selected = []
     for pat in patterns:
-        matches = fnmatch.filter(available, pat)
+        matches = [m for m in fnmatch.filter(available, pat) if m == pat or disabled_reason(m) is None]
         if not matches:
-            sys.exit(f"error: no test matches '{pat}'. Available: {', '.join(available)}")
+            sys.exit(f"error: no enabled test matches '{pat}'. Available: {', '.join(available)}")
         selected += [m for m in matches if m not in selected]
     return selected
 
@@ -360,7 +376,9 @@ def load_results() -> list[Result]:
     results = []
     for test in discover_tests():
         f = OUT_DIR / test / "result.json"
-        if f.is_file():
+        if disabled_reason(test) is not None:
+            results.append(Result(test, status="DISABLED"))
+        elif f.is_file():
             results.append(Result(**json.loads(f.read_text(encoding="utf-8"))))
         else:
             results.append(Result(test, status="NOT_RUN"))
@@ -372,6 +390,9 @@ def format_report(results: list[Result]) -> str:
     hdr = f"{'TEST':<{w}} {'STATUS':<11} {'CHECKS':>7} {'ERRORS':>7} {'WARNS':>6} {'BUILD':>7} {'SIM':>7}  LAST RUN"
     lines = [hdr, "-" * len(hdr)]
     for r in results:
+        if r.status == "DISABLED":
+            lines.append(f"{r.test:<{w}} {'DISABLED':<11} {disabled_reason(r.test)}")
+            continue
         if r.status == "NOT_RUN":
             lines.append(f"{r.test:<{w}} {'NOT_RUN':<11}")
             continue
@@ -379,12 +400,12 @@ def format_report(results: list[Result]) -> str:
             f"{r.test:<{w}} {r.status:<11} {r.checks:>7} {r.errors:>7} {r.warnings:>6} "
             f"{r.build_s:>6.1f}s {r.sim_s:>6.1f}s  {r.timestamp}"
         )
-    ran = [r for r in results if r.status != "NOT_RUN"]
+    ran = [r for r in results if r.status not in ("NOT_RUN", "DISABLED")]
     passed = sum(r.status == "PASS" for r in ran)
     lines += ["-" * len(hdr), f"{passed}/{len(ran)} passed"]
 
     for r in results:
-        if r.status not in ("PASS", "NOT_RUN") and r.first_errors:
+        if r.status not in ("PASS", "NOT_RUN", "DISABLED") and r.first_errors:
             lines += ["", f"{r.test} ({r.status}):"] + [f"  {e}" for e in r.first_errors]
             log = "build.log" if r.status == "BUILD_FAIL" else "sim.log"
             lines.append(f"  -> sim/out/{r.test}/{log}")
@@ -518,7 +539,9 @@ def main():
     available = discover_tests()
 
     if args.list:
-        print("\n".join(available))
+        for t in available:
+            reason = disabled_reason(t)
+            print(t if reason is None else f"{t}  (DISABLED: {reason})")
         return 0
 
     if args.report:
@@ -529,7 +552,7 @@ def main():
         return 0
 
     if args.all:
-        tests = available
+        tests = [t for t in available if disabled_reason(t) is None]
     elif args.tests:
         tests = select_tests(args.tests, available)
     else:

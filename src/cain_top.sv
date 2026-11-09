@@ -1,4 +1,8 @@
-module cain_top (
+module cain_top #(
+    // Where the DSP ROM init files are, relative to where the tools run: Efinity runs in
+    // CAIN_project/. The top-level sim (sim/tests/cain_top) points it at its own run directory.
+    parameter DSP_INIT_DIR = "../src/dsp/building_blocks/"
+) (
     input        clk_50,   // 50 MHz clock from board. Shared with ethernet PHY for RMII
     input        clk_core, // Core clock for high speed DSP - as high as timing allows. Currently 200MHz
     input        clk_sram, // SRAM clock. Also as high as timing allows. Currentl 100MHz
@@ -117,27 +121,42 @@ module cain_top (
     // The table's own resolution: no phase truncation, so no truncation spurs. The LO comes out
     // at 107/1024 * fs = 5004.9 Hz, the same for every channel, which the correlation ignores.
     localparam DSP_MIXER_PHASE_WIDTH = DSP_MIXER_LUT_AWIDTH + 2;
-    localparam DSP_MIXER_INIT_FILE = "../src/dsp/building_blocks/mixer_lut.hex";
+    localparam DSP_MIXER_INIT_FILE = {DSP_INIT_DIR, "mixer_lut.hex"};
     localparam DSP_MIXER_INIT_HEX = 1;
 
     localparam DSP_DECIM_TAPS = 512;
     localparam DSP_DECIMATION = 4;
-    localparam DSP_DECIM_INIT_FILE = "../src/dsp/building_blocks/decimator_coef.hex";
+    localparam DSP_DECIM_INIT_FILE = {DSP_INIT_DIR, "decimator_coef.hex"};
     localparam DSP_DECIM_INIT_HEX = 1;
     
     localparam DSP_XCORR_WINDOW_LEN = 1024;
     localparam DSP_XCORR_WINDOW_STEP = 16;
     localparam DSP_XCORR_MAX_LAG = 10;
-    // Calculates the number of MACs we need to do per clock to achieve the input sample rate
-    localparam DSP_XCORR_MACS = int'($ceil(real'(DSP_XCORR_WINDOW_LEN) * (real'(DSP_XCORR_MAX_LAG)*2 + 1) * real'(I2S_CHANNELS*(I2S_CHANNELS-1)/2) * real'(DSP_INPUT_FS) / real'(DSP_DECIMATION) / real'(CLK_CORE_FREQ) / real'(DSP_XCORR_WINDOW_STEP)));
+    // The fewest MAC lanes that keep up with the input: the correlator works on MACS lags at
+    // once, so each pair takes ceil(LAGS / MACS) passes of WINDOW_LEN + MACS - 1 clocks (see
+    // cross_correlator.sv), and a window's worth has to fit in the time WINDOW_STEP decimated
+    // samples take to come in, with 5% to spare. Falling behind loses samples (the decimator
+    // has no backpressure), and the correlator stops for good.
+    localparam      DSP_XCORR_LAGS   = 2*DSP_XCORR_MAX_LAG + 1;
+    localparam      DSP_XCORR_PAIRS  = I2S_CHANNELS*(I2S_CHANNELS-1)/2;
+    localparam real DSP_XCORR_BUDGET = 0.95 * real'(CLK_CORE_FREQ) * real'(DSP_XCORR_WINDOW_STEP) * real'(DSP_DECIMATION) / real'(DSP_INPUT_FS);
+    function automatic int xcorr_macs_needed();
+        for(int m = 1; m < DSP_XCORR_LAGS; m++) begin
+            if(real'(DSP_XCORR_PAIRS) * real'((DSP_XCORR_LAGS + m - 1) / m) * real'(DSP_XCORR_WINDOW_LEN + m - 1) <= DSP_XCORR_BUDGET) begin
+                return m;
+            end
+        end
+        return DSP_XCORR_LAGS;
+    endfunction
+    localparam DSP_XCORR_MACS = xcorr_macs_needed();
     localparam DSP_XCORR_OUT_WIDTH = 32;
 
-    localparam DSP_DF_COEF_FILE = "../src/dsp/building_blocks/direction_matrix.hex";
+    localparam DSP_DF_COEF_FILE = {DSP_INIT_DIR, "direction_matrix.hex"};
     localparam DSP_DF_COEF_FRAC = 23;
     localparam DSP_DF_OUT_WIDTH = 16;
     localparam DSP_DF_OUT_FRAC = 14;
 
-    localparam DSP_MOVAVG_LOG2_WINDOW_SIZE = 4;
+    localparam DSP_MOVAVG_LOG2_WINDOW_SIZE = 8;
     
 
 

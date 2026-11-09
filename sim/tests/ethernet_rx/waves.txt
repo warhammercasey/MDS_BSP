@@ -1,0 +1,24 @@
+# GTKWave signals for the ethernet_rx test. Paths are relative to tb_ethernet.
+# Format: see sim/waves.py
+
+clk
+rstn
+
+group RX
+    phy_crs
+    phy_rxd                     bin
+    dut.mac_rx.tvalid
+    dut.mac_rx.tdata            hex
+    dut.mac_rx.tlast
+    dut.udp_stack_i.eth_depacketizer_i.state
+    dut.udp_stack_i.ipv4_depacketizer_i.state
+    dut.udp_stack_i.udp_depacketizer_i.state
+end
+
+group APB
+    apb.psel*
+    apb.penable
+    apb.pwrite
+    apb.paddr                   hex
+    apb.prdata                  hex
+end

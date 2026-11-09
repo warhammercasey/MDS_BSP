@@ -4,11 +4,13 @@
 // udp_stack + udp_stack_regs test, through rmii as on the board. Frames are built
 // independently here (own CRC-32 and IPv4 checksum) and compared byte for byte.
 //
+// TX test (udp_stack_tx):
 //   registers  reset values, read/write, PSLVERR for no register and read-only writes
 //   TX         datagrams of several sizes (tx_length, set here) from the payload
 //              stream (with stalls) must
 //              appear on TXEN/TXD exactly as built here: headers, padding, FCS, and
 //              the IPv4 identification counting up. TX_COUNT counts them.
+// RX tests (udp_stack_rx):
 //   RX         frames sent on CRS_DV/RXD: good ones (unicast, broadcast, padded, IP
 //              options, UDP shorter than IP, maximum size) come out with the right
 //              headers and payload, and show in the RX registers. Bad or unwanted ones
@@ -19,7 +21,16 @@
 //   random     a mix of the RX cases with random sizes and app stalls
 //   loopback   TXEN/TXD wired to CRS_DV/RXD, addressed to ourselves: every datagram
 //              sent comes back
+//
+// The RX tests are chosen with +define+TB_UDP_STACK_RX rather than a parameter: they look
+// inside the RX path, and Verilator resolves hierarchical names even in generate branches
+// that aren't built, so the TX test couldn't build without the RX path otherwise.
 module tb_udp_stack;
+`ifdef TB_UDP_STACK_RX
+    localparam bit RX = 1;
+`else
+    localparam bit RX = 0;
+`endif
     import tb_pkg::*;
 
     `TB_INIT
@@ -246,6 +257,14 @@ module tb_udp_stack;
     int unsigned  sink_pct = 100;
     int unsigned  rx_quiet = 0;
 
+    // Whether the Ethernet layer's frame buffer has anything waiting (RX tests only)
+    logic rx_buf_busy;
+`ifdef TB_UDP_STACK_RX
+    assign rx_buf_busy = stack.eth_depacketizer_i.buf_out.tvalid;
+`else
+    assign rx_buf_busy = 1'b0;
+`endif
+
     always @(posedge clk) begin
         if (rstn) begin
             if (rx_udp_hdr.valid && rx_udp_hdr.ready)
@@ -260,7 +279,7 @@ module tb_udp_stack;
                 end
             end
             // Nothing left anywhere in the RX path
-            if (stack.eth_depacketizer_i.buf_out.tvalid || rx_payload.tvalid || rx_udp_hdr.valid)
+            if (rx_buf_busy || rx_payload.tvalid || rx_udp_hdr.valid)
                 rx_quiet = 0;
             else
                 rx_quiet++;
@@ -531,7 +550,7 @@ module tb_udp_stack;
         logic [31:0]  fcs;
         hdr_t         h;
 
-        tb_info("Testing udp_stack + udp_stack_regs through rmii");
+        tb_info($sformatf("Testing udp_stack + udp_stack_regs through rmii: %s", RX ? "RX" : "TX"));
         p = {};
         for (int i = 0; i < 9; i++) p.push_back(8'("1" + i)); // "123456789"
         `CHECK_EQ(ref_fcs(p), 32'hCBF4_3926, "TB CRC-32 of \"123456789\"")
@@ -540,55 +559,62 @@ module tb_udp_stack;
         rstn = 1'b1;
         repeat (5) @(posedge clk);
 
-        // --- Registers ---
-        tb_info("Registers");
-        apb_check(CTRL, 32'h0);
-        apb_check(TX_DST_MAC_HI, 32'h0000_FFFF);
-        apb_check(TX_DST_MAC_LO, 32'hFFFF_FFFF);
-        apb_check(LOCAL_MAC_HI, 32'h0000_0200);
-        apb_check(LOCAL_MAC_LO, 32'h0000_0001);
-        apb_check(LOCAL_IP, 32'hC0A8_0064);
-        apb_check(TX_DST_IP, 32'hFFFF_FFFF);
-        apb_check(TX_TTL, 32'd64);
-        apb_check(TX_PORTS, {16'd5000, 16'd5000});
-        apb_check(TX_COUNT, 32'd0);
-        apb_check(RX_COUNT, 32'd0);
-        apb_check('h0A, 0, 1'b1);
-        apb_check('h0F, 0, 1'b1);
-        apb_check('h1A, 0, 1'b1);
-        apb_check('hFF, 0, 1'b1);
-        apb_write(TX_COUNT, 32'h1, 1'b1);
-        apb_write(RX_COUNT, 32'h1, 1'b1);
-        apb_write(RX_SRC_IP, 32'h1, 1'b1);
-        apb_write('h0A, 32'h1, 1'b1);
-        apb_write('h40, 32'h1, 1'b1);
-        apb_write(TX_TTL, 32'hFFFF_FF80);
-        apb_check(TX_TTL, 32'h80);
-        apb_write(CTRL, 32'h1);
-        apb_check(CTRL, 32'h1);
-        apb_write(CTRL, 32'h0);
-        configure(48'h02_AA_BB_CC_DD_EE, PEER_MAC, 32'h0A00_0002, PEER_IP, 8'd32, 16'd1234, 16'd5678);
-        apb_check(LOCAL_MAC_HI, 32'h0000_02AA);
-        apb_check(LOCAL_MAC_LO, 32'hBBCC_DDEE);
-        apb_check(TX_DST_MAC_HI, 32'h0000_0011);
-        apb_check(TX_DST_MAC_LO, 32'h2233_4455);
-        apb_check(LOCAL_IP, 32'h0A00_0002);
-        apb_check(TX_DST_IP, PEER_IP);
-        apb_check(TX_PORTS, {16'd1234, 16'd5678});
+        if (!RX) begin
+            // --- Registers ---
+            tb_info("Registers");
+            apb_check(CTRL, 32'h0);
+            apb_check(TX_DST_MAC_HI, 32'h0000_FFFF);
+            apb_check(TX_DST_MAC_LO, 32'hFFFF_FFFF);
+            apb_check(LOCAL_MAC_HI, 32'h0000_0200);
+            apb_check(LOCAL_MAC_LO, 32'h0000_0001);
+            apb_check(LOCAL_IP, 32'hC0A8_0064);
+            apb_check(TX_DST_IP, 32'hFFFF_FFFF);
+            apb_check(TX_TTL, 32'd64);
+            apb_check(TX_PORTS, {16'd5000, 16'd5000});
+            apb_check(TX_COUNT, 32'd0);
+            apb_check(RX_COUNT, 32'd0);
+            apb_check('h0A, 0, 1'b1);
+            apb_check('h0F, 0, 1'b1);
+            apb_check('h1A, 0, 1'b1);
+            apb_check('hFF, 0, 1'b1);
+            apb_write(TX_COUNT, 32'h1, 1'b1);
+            apb_write(RX_COUNT, 32'h1, 1'b1);
+            apb_write(RX_SRC_IP, 32'h1, 1'b1);
+            apb_write('h0A, 32'h1, 1'b1);
+            apb_write('h40, 32'h1, 1'b1);
+            apb_write(TX_TTL, 32'hFFFF_FF80);
+            apb_check(TX_TTL, 32'h80);
+            apb_write(CTRL, 32'h1);
+            apb_check(CTRL, 32'h1);
+            apb_write(CTRL, 32'h0);
+            configure(48'h02_AA_BB_CC_DD_EE, PEER_MAC, 32'h0A00_0002, PEER_IP, 8'd32, 16'd1234, 16'd5678);
+            apb_check(LOCAL_MAC_HI, 32'h0000_02AA);
+            apb_check(LOCAL_MAC_LO, 32'hBBCC_DDEE);
+            apb_check(TX_DST_MAC_HI, 32'h0000_0011);
+            apb_check(TX_DST_MAC_LO, 32'h2233_4455);
+            apb_check(LOCAL_IP, 32'h0A00_0002);
+            apb_check(TX_DST_IP, PEER_IP);
+            apb_check(TX_PORTS, {16'd1234, 16'd5678});
 
-        // --- TX ---
-        tb_info("TX datagrams");
-        tx_datagrams(1, 1);      // Padded to the minimum frame
-        tx_datagrams(17, 1);
-        tx_datagrams(18, 1);     // Exactly the minimum
-        tx_datagrams(19, 1);
-        tx_datagrams(100, 3);    // Back to back
-        tx_datagrams(MAX_PAYLOAD, 2);
-        tb_info("TX datagrams, payload stream stalling");
-        src_stall_pct = 60;
-        repeat (10) tx_datagrams($urandom_range(300, 1), $urandom_range(3, 1));
-        src_stall_pct = 0;
-        apb_check(TX_COUNT, n_tx);
+            // --- TX ---
+            tb_info("TX datagrams");
+            tx_datagrams(1, 1);      // Padded to the minimum frame
+            tx_datagrams(17, 1);
+            tx_datagrams(18, 1);     // Exactly the minimum
+            tx_datagrams(19, 1);
+            tx_datagrams(100, 3);    // Back to back
+            tx_datagrams(MAX_PAYLOAD, 2);
+            tb_info("TX datagrams, payload stream stalling");
+            src_stall_pct = 60;
+            repeat (10) tx_datagrams($urandom_range(300, 1), $urandom_range(3, 1));
+            src_stall_pct = 0;
+            apb_check(TX_COUNT, n_tx);
+            tb_info($sformatf("%0d datagrams sent", n_tx));
+            tb_finish();
+        end
+
+        // RX tests
+        configure(48'h02_AA_BB_CC_DD_EE, PEER_MAC, 32'h0A00_0002, PEER_IP, 8'd32, 16'd1234, 16'd5678);
 
         // --- RX directed ---
         tb_info("RX directed");

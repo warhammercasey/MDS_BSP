@@ -12,7 +12,7 @@ package cain_clocks_pkg;
     localparam int  NUM_PAIRS = NUM_CLKS * (NUM_CLKS - 1);
     localparam real FREQ_HZ [NUM_CLKS] = '{
         50.0e6,      // clk_50
-        200.0e6,     // clk_core
+        125.0e6,     // clk_core
         100.0e6,     // clk_sram
         73.5714e6    // clk_io
     };

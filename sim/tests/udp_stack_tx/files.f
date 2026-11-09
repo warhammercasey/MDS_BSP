@@ -1,4 +1,5 @@
-// Sources for the udp_stack sim. Paths are relative to the repo root.
+// Sources for the udp_stack TX test (also used by udp_stack_rx).
+// Paths are relative to the repo root.
 --top-module tb_udp_stack
 +incdir+src/ethernet/packetization
 
@@ -20,4 +21,4 @@ src/ethernet/packetization/udp_depacketizer.sv
 src/ethernet/packetization/udp_stack.sv
 src/ethernet/packetization/udp_stack_regs.sv
 
-sim/tests/udp_stack/tb_udp_stack.sv
+sim/tests/udp_stack_tx/tb_udp_stack.sv

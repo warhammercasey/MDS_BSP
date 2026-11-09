@@ -47,7 +47,7 @@ DIR_SSRC = 0x44495230  # "DIR0", cain_top DIR_RTP_SSRC
 DIR_VECTOR = struct.Struct(">hhh")
 DIR_FRAC = 14  # DSP_DF_OUT_FRAC
 # Mic rate / decimation (DSP_DECIMATION) / correlation step (DSP_XCORR_WINDOW_STEP)
-DIR_RATE = 73_571_400 / 24 / 64 / 4 / 32  # 374.2 directions/s
+DIR_RATE = 73_571_400 / 24 / 64 / 4 / 16  # 374.2 directions/s
 
 # Mic positions in metres, in channel order, as model/time_correlation_model.m and
 # gen_direction_matrix.py. Only drawn, for orientation.
